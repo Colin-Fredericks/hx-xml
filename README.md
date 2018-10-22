@@ -5,6 +5,7 @@ This is a bunch of batch tools to work directly with a course export (the file s
 
 Because python's built-in xml parser has trouble with namespaces and xpaths, some XML parsing is done with BeautifulSoup instead. It's included in this folder as `bs4`. For better unicode handling, `unicodecsv` is also included. BeautifulSoup requires `lxml` for XML parsing, so you'll need to install that, probably via `sudo pip3 install lxml`.
 
+* `SetWeeksForAudit.py`, which sets the number of sections in the course (starting from the beginning) in which *all* graded problems will be available to audit learners.
 * `SetMaxAttempts.py`, which sets the number of attempts automatically in every problem in a course.
 * `SetShowAnswer.py`, which sets the showanswer value automatically (or removes it) in every problem in a course.
 * `SetVideoDownloads.py`, which enables or disables video and/or transcript downloading for every video in a course.
