@@ -31,7 +31,6 @@ skip_tags = [
     'annotatable', # This is the older, deprecated annotation component.
     'lti',  # This is the older, deprecated LTI component.
     'oppia',
-    'openassessment', # This is the older, deprecated ORA.
     'poll_question', # This is the older, deprecated poll component.
     'problem-builder',
     'recommender',
@@ -44,6 +43,7 @@ gradeable_tags = [
         'drag-and-drop-v2',
         'imageannotation',
         'lti_consumer',
+        'openassessment',
         'problem',
         'textannotation',
         'ubcpi',
@@ -115,6 +115,7 @@ def getXMLInfo(folder, root, args):
         'imageannotation',
         'library_content',
         'lti_consumer',
+        'openassessment',
         'poll',
         'problem',
         'survey',
@@ -146,11 +147,8 @@ def getXMLInfo(folder, root, args):
             'index': index,
             'type': child.tag,
             'name': '',
-            'url': '',
-            'contents': [],
-            'links': [],
-            'images': [],
-            'sub': []
+            'url_name': '',
+            'contents': []
         }
 
         # get display_name or use placeholder
@@ -163,17 +161,16 @@ def getXMLInfo(folder, root, args):
         # get url_name but there are no placeholders
         # Note that even some inline XML have url_names.
         if 'url_name' in child.attrib:
-            temp['url'] = child.attrib['url_name']
+            temp['url_name'] = child.attrib['url_name']
         else:
-            temp['url'] = None
+            temp['url_name'] = None
 
-        # In the future: check to see whether this child is a pointer tag or inline XML.
         nextFile = os.path.join(os.path.dirname(folder), child.tag)
         if child.tag in branch_nodes:
-            child_info = drillDown(nextFile, temp['url'], child, args)
+            child_info = drillDown(nextFile, temp['url_name'], child, args)
             temp['contents'] = child_info['contents']
         elif child.tag in leaf_nodes:
-            child_info = getComponentInfo(nextFile, temp['url'], child, args)
+            child_info = getComponentInfo(nextFile, temp['url_name'], child, args)
             # For leaf nodes, add item info to the dict
             # instead of adding a new contents entry
             temp.update(child_info['contents'])
@@ -223,6 +220,7 @@ def fillInRows(flat_course):
 
     return flat_course
 
+
 # Takes a nested structure of lists and dicts that represents the course
 # and returns a single list of dicts where each dict is a component
 def CourseFlattener(course_dict, new_row={}):
@@ -249,12 +247,15 @@ def CourseFlattener(course_dict, new_row={}):
         if temp_row['type'] not in skip_tags:
             return [temp_row]
 
+
 def SetAuditVis(all_gradeable, gradeable_to_change, rootFileDir):
+    found_tags = []
     unfound_tags = []
     num_files = 0
     num_changed_files = 0
-    gradeable_url_names = [x['url'] for x in all_gradeable]
-    change_url_names = [x['url'] for x in gradeable_to_change]
+    # Get just the URLs for each file.
+    gradeable_url_names = [x['url_name'] for x in all_gradeable]
+    change_url_names = [x['url_name'] for x in gradeable_to_change]
 
     folders_to_walk = set([x['type'] for x in all_gradeable])
     graded_item_folders = [os.path.join(rootFileDir, x) for x in folders_to_walk]
@@ -263,22 +264,24 @@ def SetAuditVis(all_gradeable, gradeable_to_change, rootFileDir):
         # Walk through the folder for each type of tag in the list.
         for dirpath, dirnames, filenames in os.walk(folder):
             for eachfile in filenames:
-                thisProbType = []
+                thisfilename = os.path.splitext(eachfile)[0]
 
-                # Get the XML for each file. When we can't, keep a list.
+                # Get the XML for each file. When we can't find a file, keep a list.
                 try:
                     tree = lxml.etree.parse(os.path.join(dirpath, eachfile))
                     root = tree.getroot()
+                    found_tags.append(thisfilename)
                 except OSError:
-                    unfound_tags.append(eachfile)
+                    # This is what happens when there's inline XML.
+                    # It's potentially a real issue. May need to rewrite over this.
+                    unfound_tags.append(thisfilename)
                     break
-
 
                 # Remove any existing audit visibility for all gradeable items.
                 # if eachfile in gradeable_url_names:
                 #   root.set('visibility','')
                 # Set audit visibility for the ones we want to change.
-                if os.path.splitext(eachfile)[0] in change_url_names:
+                if thisfilename in change_url_names:
                     num_changed_files += 1
                     # root.set('visibility','audit')
 
@@ -286,14 +289,19 @@ def SetAuditVis(all_gradeable, gradeable_to_change, rootFileDir):
                 # tree.write(os.path.join(dirpath, eachfile), encoding='UTF-8', xml_declaration=False)
                 num_files += 1
 
+    unfindable_tags = list(set(gradeable_url_names) - set(found_tags))
+
     if num_files == 0:
         print('No files found - wrong or empty directory?')
     else:
         print('Visibility set for ' + str(num_files) + ' files.')
         print(str(num_changed_files) + ' made visible.')
+        if len(unfindable_tags) > 0:
+            print('The following items are declared inline and couldn\'t be found:')
+            print([x for x in all_gradeable if x['url_name'] in unfindable_tags])
         if len(unfound_tags) > 0:
             print('Could not set visibility for the following items:')
-            print(unfound_tags)
+            print([x for x in all_gradeable if x['url_name'] in unfound_tags])
 
 
 # Main function
@@ -346,13 +354,13 @@ def SetWeeksForAudit(args = ['-h']):
         course_dict = {
             'type': course_root.tag,
             'name': '',
-            'url': course_root.attrib['url_name'],
+            'url_name': course_root.attrib['url_name'],
             'contents': []
         }
 
         course_info = drillDown(
             os.path.join(rootFileDir, course_dict['type']),
-            course_dict['url'],
+            course_dict['url_name'],
             course_root,
             args
         )
