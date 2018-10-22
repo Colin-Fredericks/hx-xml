@@ -103,7 +103,7 @@ def getComponentInfo(folder, filename, child, week, args):
     return {
         'contents': temp,
         'parent_name': temp['name'],
-        'was_gradeable_fragment': isGradeable and not isFile and isInRightWeek
+        'was_gradeable_fragment': isGradeable and not isFile
     }
 
 
