@@ -249,9 +249,52 @@ def CourseFlattener(course_dict, new_row={}):
         if temp_row['type'] not in skip_tags:
             return [temp_row]
 
-def SetAuditVis(all_gradeable, gradeable_to_change):
-    print(gradeable_to_change)
-    pass
+def SetAuditVis(all_gradeable, gradeable_to_change, rootFileDir):
+    unfound_tags = []
+    num_files = 0
+    num_changed_files = 0
+    gradeable_url_names = [x['url'] for x in all_gradeable]
+    change_url_names = [x['url'] for x in gradeable_to_change]
+
+    folders_to_walk = set([x['type'] for x in all_gradeable])
+    graded_item_folders = [os.path.join(rootFileDir, x) for x in folders_to_walk]
+
+    for folder in graded_item_folders:
+        # Walk through the folder for each type of tag in the list.
+        for dirpath, dirnames, filenames in os.walk(folder):
+            for eachfile in filenames:
+                thisProbType = []
+
+                # Get the XML for each file. When we can't, keep a list.
+                try:
+                    tree = lxml.etree.parse(os.path.join(dirpath, eachfile))
+                    root = tree.getroot()
+                except OSError:
+                    unfound_tags.append(eachfile)
+                    break
+
+
+                # Remove any existing audit visibility for all gradeable items.
+                # if eachfile in gradeable_url_names:
+                #   root.set('visibility','')
+                # Set audit visibility for the ones we want to change.
+                if os.path.splitext(eachfile)[0] in change_url_names:
+                    num_changed_files += 1
+                    # root.set('visibility','audit')
+
+                # Save the file
+                # tree.write(os.path.join(dirpath, eachfile), encoding='UTF-8', xml_declaration=False)
+                num_files += 1
+
+    if num_files == 0:
+        print('No files found - wrong or empty directory?')
+    else:
+        print('Visibility set for ' + str(num_files) + ' files.')
+        print(str(num_changed_files) + ' made visible.')
+        if len(unfound_tags) > 0:
+            print('Could not set visibility for the following items:')
+            print(unfound_tags)
+
 
 # Main function
 def SetWeeksForAudit(args = ['-h']):
@@ -323,7 +366,7 @@ def SetWeeksForAudit(args = ['-h']):
         # Get all the problem url_names that need to be changed.
         gradeable_to_change = [y for y in all_gradeable if y['index'] < int(args.weeks)]
         # Set audit visibility for all problems.
-        SetAuditVis(all_gradeable, gradeable_to_change)
+        SetAuditVis(all_gradeable, gradeable_to_change, rootFileDir)
 
 
 
