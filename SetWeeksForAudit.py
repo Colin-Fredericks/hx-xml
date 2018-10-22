@@ -51,14 +51,17 @@ gradeable_tags = [
 ]
 
 
-# Always gets the display name.
-# For video and problem files, gets other info too
-def getComponentInfo(folder, filename, child, args):
+def getComponentInfo(folder, filename, child, week, args):
+
+    isFile = False
+    isGradeable = False
+    isInRightWeek = False
 
     # Try to open file.
     try:
         tree = lxml.etree.parse(folder + '/' + filename + '.xml')
         root = tree.getroot()
+        isFile = True
     except OSError:
         # If we can't get a file, try to traverse inline XML.
         root = child
@@ -77,15 +80,32 @@ def getComponentInfo(folder, filename, child, args):
 
     # Label all of them as components regardless of type.
     temp['component'] = temp['name']
-    # Note whether they're gradeable items
+    # Remove any existing audit visibility for all gradeable items.
     if root.tag in gradeable_tags:
-        temp['gradeable'] = True
+        isGradeable = True
+        # print('found gradeable tag: ' + temp['name'])
+        # root.set('visibility','')
+        # If it's early enough in the course, set it to visible.
+        if week <= int(args.weeks):
+            isInRightWeek = True
+            pass
+            # print('making ' + temp['name'] + ' visible.')
+            # root.set('visibility','audit')
 
-    return {'contents': temp, 'parent_name': temp['name']}
+        # If this is a file, save it. If not, report back to the parent.
+        if isFile:
+            # tree.write(os.path.join(dirpath, eachfile), encoding='UTF-8', xml_declaration=False)
+            pass
+
+    return {
+        'contents': temp,
+        'parent_name': temp['name'],
+        'was_gradeable_fragment': isGradeable and not isFile and isInRightWeek
+    }
 
 
 # Recursion function for outline-declared xml files
-def drillDown(folder, filename, root, args):
+def drillDown(folder, filename, root, week, args):
 
     # Try to open file.
     try:
@@ -93,17 +113,17 @@ def drillDown(folder, filename, root, args):
         root = tree.getroot()
     except IOError:
         # If we can't get a file, try to traverse inline XML.
-        ddinfo = getXMLInfo(folder, root, args)
+        ddinfo = getXMLInfo(folder, root, week, args)
         if ddinfo:
             return ddinfo
         else:
             print('Possible missing file or empty XML element: ' + os.path.join(folder, (filename + '.xml')))
             return {'contents': [], 'parent_name': '', 'found_file': False}
 
-    return getXMLInfo(folder, root, args)
+    return getXMLInfo(folder, root, week, args)
 
 
-def getXMLInfo(folder, root, args):
+def getXMLInfo(folder, root, week, args):
 
     # We need lists of container nodes and leaf nodes so we can tell
     # whether we have to do more recursion.
@@ -135,6 +155,7 @@ def getXMLInfo(folder, root, args):
     ]
 
     contents = []
+    gradeable_children = False
 
     # Some items are created without a display name; use their tag name instead.
     if 'display_name' in root.attrib:
@@ -150,6 +171,9 @@ def getXMLInfo(folder, root, args):
             'url_name': '',
             'contents': []
         }
+
+        if root.tag == 'course':
+            week += 1
 
         # get display_name or use placeholder
         if 'display_name' in child.attrib:
@@ -167,10 +191,12 @@ def getXMLInfo(folder, root, args):
 
         nextFile = os.path.join(os.path.dirname(folder), child.tag)
         if child.tag in branch_nodes:
-            child_info = drillDown(nextFile, temp['url_name'], child, args)
+            child_info = drillDown(nextFile, temp['url_name'], child, week, args)
             temp['contents'] = child_info['contents']
         elif child.tag in leaf_nodes:
-            child_info = getComponentInfo(nextFile, temp['url_name'], child, args)
+            child_info = getComponentInfo(nextFile, temp['url_name'], child, week, args)
+            if child_info['was_gradeable_fragment']:
+                gradeable_children = True
             # For leaf nodes, add item info to the dict
             # instead of adding a new contents entry
             temp.update(child_info['contents'])
@@ -191,117 +217,11 @@ def getXMLInfo(folder, root, args):
 
         contents.append(temp)
 
+    if gradeable_children:
+        print(display_name + ' in week ' + str(week) + ' has gradeable children, writing file.')
+        # tree.write(os.path.join(dirpath, eachfile), encoding='UTF-8', xml_declaration=False)
+
     return {'contents': contents, 'parent_name': display_name, 'found_file': True}
-
-
-# Gets the full set of data headers for the course.
-# flat_course is a list of dictionaries.
-def getAllKeys(flat_course, key_set=set()):
-
-    for row in flat_course:
-        for key in row:
-            key_set.add(key)
-
-    return key_set
-
-
-# Ensure that all dicts have the same entries, adding blanks if needed.
-# flat_course is a list of dictionaries.
-def fillInRows(flat_course):
-
-    # Get a list of all dict keys from the entire nested structure and store it in a set.
-    key_set = getAllKeys(flat_course)
-
-    # Iterate through the list and add blank entries for any keys in the set that aren't present.
-    for row in flat_course:
-        for key in key_set:
-            if key not in row:
-                row[key]=''
-
-    return flat_course
-
-
-# Takes a nested structure of lists and dicts that represents the course
-# and returns a single list of dicts where each dict is a component
-def CourseFlattener(course_dict, new_row={}):
-    flat_course = []
-    temp_row = new_row.copy()
-
-    # Add all the data from the current level to the current row except 'contents'.
-    for key in course_dict:
-        if key is not 'contents':
-            temp_row[key] = course_dict[key]
-
-    # If the current structure has "contents", we're not at the bottom of the hierarchy.
-    if 'contents' in course_dict:
-        # Go down into each item in "contents" and add its contents to the course.
-        for entry in course_dict['contents']:
-            temp = CourseFlattener(entry, temp_row)
-            if temp:
-                flat_course = flat_course + temp
-        return flat_course
-
-    # If there are no contents, we're at the bottom.
-    else:
-        # Don't include the wiki and certain other items.
-        if temp_row['type'] not in skip_tags:
-            return [temp_row]
-
-
-def SetAuditVis(all_gradeable, gradeable_to_change, rootFileDir):
-    found_tags = []
-    unfound_tags = []
-    num_files = 0
-    num_changed_files = 0
-    # Get just the URLs for each file.
-    gradeable_url_names = [x['url_name'] for x in all_gradeable]
-    change_url_names = [x['url_name'] for x in gradeable_to_change]
-
-    folders_to_walk = set([x['type'] for x in all_gradeable])
-    graded_item_folders = [os.path.join(rootFileDir, x) for x in folders_to_walk]
-
-    for folder in graded_item_folders:
-        # Walk through the folder for each type of tag in the list.
-        for dirpath, dirnames, filenames in os.walk(folder):
-            for eachfile in filenames:
-                thisfilename = os.path.splitext(eachfile)[0]
-
-                # Get the XML for each file. When we can't find a file, keep a list.
-                try:
-                    tree = lxml.etree.parse(os.path.join(dirpath, eachfile))
-                    root = tree.getroot()
-                    found_tags.append(thisfilename)
-                except OSError:
-                    # This is what happens when there's inline XML.
-                    # It's potentially a real issue. May need to rewrite over this.
-                    unfound_tags.append(thisfilename)
-                    break
-
-                # Remove any existing audit visibility for all gradeable items.
-                # if eachfile in gradeable_url_names:
-                #   root.set('visibility','')
-                # Set audit visibility for the ones we want to change.
-                if thisfilename in change_url_names:
-                    num_changed_files += 1
-                    # root.set('visibility','audit')
-
-                # Save the file
-                # tree.write(os.path.join(dirpath, eachfile), encoding='UTF-8', xml_declaration=False)
-                num_files += 1
-
-    unfindable_tags = list(set(gradeable_url_names) - set(found_tags))
-
-    if num_files == 0:
-        print('No files found - wrong or empty directory?')
-    else:
-        print('Visibility set for ' + str(num_files) + ' files.')
-        print(str(num_changed_files) + ' made visible.')
-        if len(unfindable_tags) > 0:
-            print('The following items are declared inline and couldn\'t be found:')
-            print([x for x in all_gradeable if x['url_name'] in unfindable_tags])
-        if len(unfound_tags) > 0:
-            print('Could not set visibility for the following items:')
-            print([x for x in all_gradeable if x['url_name'] in unfound_tags])
 
 
 # Main function
@@ -362,20 +282,9 @@ def SetWeeksForAudit(args = ['-h']):
             os.path.join(rootFileDir, course_dict['type']),
             course_dict['url_name'],
             course_root,
+            0,
             args
         )
-        course_dict['name'] = course_info['parent_name']
-        course_dict['contents'] = course_info['contents']
-
-        flat_course = fillInRows(CourseFlattener(course_dict))
-
-        # Get all the problem url_names period.
-        all_gradeable = [x for x in flat_course if x['gradeable'] == True]
-        # Get all the problem url_names that need to be changed.
-        gradeable_to_change = [y for y in all_gradeable if y['index'] < int(args.weeks)]
-        # Set audit visibility for all problems.
-        SetAuditVis(all_gradeable, gradeable_to_change, rootFileDir)
-
 
 
 if __name__ == "__main__":
