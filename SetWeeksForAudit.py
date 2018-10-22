@@ -83,18 +83,21 @@ def getComponentInfo(folder, filename, child, week, args):
     # Remove any existing audit visibility for all gradeable items.
     if root.tag in gradeable_tags:
         isGradeable = True
-        # print('found gradeable tag: ' + temp['name'])
-        # root.set('visibility','')
+        print('found gradeable tag: ' + temp['name'])
+        try:
+            del root.attrib['visibility']
+        except KeyError:
+            pass
         # If it's early enough in the course, set it to visible.
         if week <= int(args.weeks):
             isInRightWeek = True
             pass
-            # print('making ' + temp['name'] + ' visible.')
-            # root.set('visibility','audit')
+            print('making ' + temp['name'] + ' visible.')
+            root.set('visibility','audit')
 
         # If this is a file, save it. If not, report back to the parent.
         if isFile:
-            # tree.write(os.path.join(folder, filename), encoding='UTF-8', xml_declaration=False)
+            tree.write(os.path.join(folder, (filename + '.xml')), encoding='UTF-8', xml_declaration=False)
             pass
 
     return {
@@ -120,7 +123,7 @@ def drillDown(folder, filename, root, week, args):
     if drill_down_info:
         if drill_down_info['gradeable_children']:
             print(drill_down_info['parent_name'] + ' in week ' + str(week) + ' has gradeable children, writing file.')
-            # tree.write(os.path.join(folder, filename), encoding='UTF-8', xml_declaration=False)
+            tree.write(os.path.join(folder, (filename + '.xml')), encoding='UTF-8', xml_declaration=False)
         return drill_down_info
     else:
         print('Possible missing file or empty XML element: ' + os.path.join(folder, (filename + '.xml')))
