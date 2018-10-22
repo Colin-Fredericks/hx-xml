@@ -94,7 +94,7 @@ def getComponentInfo(folder, filename, child, week, args):
 
         # If this is a file, save it. If not, report back to the parent.
         if isFile:
-            # tree.write(os.path.join(dirpath, eachfile), encoding='UTF-8', xml_declaration=False)
+            # tree.write(os.path.join(folder, filename), encoding='UTF-8', xml_declaration=False)
             pass
 
     return {
@@ -112,15 +112,19 @@ def drillDown(folder, filename, root, week, args):
         tree = lxml.etree.parse(os.path.join(folder, (filename + '.xml')))
         root = tree.getroot()
     except IOError:
-        # If we can't get a file, try to traverse inline XML.
-        ddinfo = getXMLInfo(folder, root, week, args)
-        if ddinfo:
-            return ddinfo
-        else:
-            print('Possible missing file or empty XML element: ' + os.path.join(folder, (filename + '.xml')))
-            return {'contents': [], 'parent_name': '', 'found_file': False}
+        # If we can't get a file, try to traverse inner XML.
+        # Don't redefine the root element.
+        pass
 
-    return getXMLInfo(folder, root, week, args)
+    drill_down_info = getXMLInfo(folder, root, week, args)
+    if drill_down_info:
+        if drill_down_info['gradeable_children']:
+            print(drill_down_info['parent_name'] + ' in week ' + str(week) + ' has gradeable children, writing file.')
+            # tree.write(os.path.join(folder, filename), encoding='UTF-8', xml_declaration=False)
+        return drill_down_info
+    else:
+        print('Possible missing file or empty XML element: ' + os.path.join(folder, (filename + '.xml')))
+        return {'contents': [], 'parent_name': ''}
 
 
 def getXMLInfo(folder, root, week, args):
@@ -217,11 +221,7 @@ def getXMLInfo(folder, root, week, args):
 
         contents.append(temp)
 
-    if gradeable_children:
-        print(display_name + ' in week ' + str(week) + ' has gradeable children, writing file.')
-        # tree.write(os.path.join(dirpath, eachfile), encoding='UTF-8', xml_declaration=False)
-
-    return {'contents': contents, 'parent_name': display_name, 'found_file': True}
+    return {'contents': contents, 'parent_name': display_name, 'gradeable_children': gradeable_children}
 
 
 # Main function
