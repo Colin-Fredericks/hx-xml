@@ -7,7 +7,6 @@ import argparse
 from bs4 import BeautifulSoup
 import lxml
 from glob import glob
-import unicodecsv as csv # https://pypi.python.org/pypi/unicodecsv/0.14.1
 
 
 instructions = """
@@ -20,7 +19,7 @@ where all assignments will be visible to audit learners.
 
 This script may fail on courses with empty containers.
 
-Last update: October 22nd, 2018
+Last update: October 25th, 2018
 """
 
 
@@ -69,7 +68,7 @@ def getComponentInfo(folder, filename, child, week, args):
     temp = {
         'type': root.tag,
         'name': '',
-        # space for other info
+        # space for other info if needed
     }
 
     # get display_name or use placeholder
@@ -83,22 +82,18 @@ def getComponentInfo(folder, filename, child, week, args):
     # Remove any existing audit visibility for all gradeable items.
     if root.tag in gradeable_tags:
         isGradeable = True
-        print('found gradeable tag: ' + temp['name'])
         try:
             del root.attrib['visibility']
         except KeyError:
             pass
-        # If it's early enough in the course, set it to visible.
+        # If the component is early enough in the course, set it to visible.
         if week <= int(args.weeks):
             isInRightWeek = True
-            pass
-            print('making ' + temp['name'] + ' visible.')
             root.set('visibility','audit')
 
         # If this is a file, save it. If not, report back to the parent.
         if isFile:
             tree.write(os.path.join(folder, (filename + '.xml')), encoding='UTF-8', xml_declaration=False)
-            pass
 
     return {
         'contents': temp,
@@ -122,7 +117,7 @@ def drillDown(folder, filename, root, week, args):
     drill_down_info = getXMLInfo(folder, root, week, args)
     if drill_down_info:
         if drill_down_info['gradeable_children']:
-            print(drill_down_info['parent_name'] + ' in week ' + str(week) + ' has gradeable children, writing file.')
+            # Write files for containers with gradeable inline components.
             tree.write(os.path.join(folder, (filename + '.xml')), encoding='UTF-8', xml_declaration=False)
         return drill_down_info
     else:
