@@ -52,15 +52,15 @@ gradeable_tags = [
 
 def getComponentInfo(folder, filename, child, week, args):
 
-    isFile = False
-    isGradeable = False
-    isInRightWeek = False
+    is_file = False
+    is_gradeable = False
+    is_in_right_week = False
 
     # Try to open file.
     try:
         tree = lxml.etree.parse(folder + '/' + filename + '.xml')
         root = tree.getroot()
-        isFile = True
+        is_file = True
     except OSError:
         # If we can't get a file, try to traverse inline XML.
         root = child
@@ -81,24 +81,24 @@ def getComponentInfo(folder, filename, child, week, args):
     temp['component'] = temp['name']
     # Remove any existing audit visibility for all gradeable items.
     if root.tag in gradeable_tags:
-        isGradeable = True
+        is_gradeable = True
         try:
             del root.attrib['visibility']
         except KeyError:
             pass
         # If the component is early enough in the course, set it to visible.
         if week <= int(args.weeks):
-            isInRightWeek = True
+            is_in_right_week = True
             root.set('visibility','audit')
 
         # If this is a file, save it. If not, report back to the parent.
-        if isFile:
+        if is_file:
             tree.write(os.path.join(folder, (filename + '.xml')), encoding='UTF-8', xml_declaration=False)
 
     return {
         'contents': temp,
         'parent_name': temp['name'],
-        'was_gradeable_fragment': isGradeable and not isFile
+        'was_gradeable_fragment': is_gradeable and not is_file
     }
 
 
@@ -257,13 +257,13 @@ def SetWeeksForAudit(args = ['-h']):
     for name in file_names:
         if os.path.isdir(name):
             if os.path.exists( os.path.join(name, 'course.xml')):
-                rootFileDir = name
+                root_file_directory = name
         else:
             if 'course.xml' in name:
-                rootFileDir = os.path.dirname(name)
+                root_file_directory = os.path.dirname(name)
 
-        rootFilePath = os.path.join(rootFileDir, 'course.xml')
-        course_tree = lxml.etree.parse(rootFilePath)
+        root_file_path = os.path.join(root_file_directory, 'course.xml')
+        course_tree = lxml.etree.parse(root_file_path)
 
         # Open course's root xml file
         # Get the current course run filename
@@ -277,7 +277,7 @@ def SetWeeksForAudit(args = ['-h']):
         }
 
         course_info = drillDown(
-            os.path.join(rootFileDir, course_dict['type']),
+            os.path.join(root_file_directory, course_dict['type']),
             course_dict['url_name'],
             course_root,
             0,
