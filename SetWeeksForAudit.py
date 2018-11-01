@@ -54,7 +54,6 @@ def getComponentInfo(folder, filename, child, week, args):
 
     is_file = False
     is_gradeable = False
-    is_in_right_week = False
 
     # Try to open file.
     try:
@@ -88,7 +87,6 @@ def getComponentInfo(folder, filename, child, week, args):
             pass
         # If the component is early enough in the course, set it to visible.
         if week <= int(args.weeks):
-            is_in_right_week = True
             pass
             print('making ' + temp['name'] + ' visible.')
             # Group 51: paid access control. Options 1 and 2: limited and full access.
