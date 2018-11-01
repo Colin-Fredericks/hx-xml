@@ -92,7 +92,7 @@ def getComponentInfo(folder, filename, child, week, args):
             pass
             print('making ' + temp['name'] + ' visible.')
             # Group 51: paid access control. Options 1 and 2: limited and full access.
-            root.set('group_access','{&quot;51&quot;: [1, 2]}')
+            root.set('group_access','{"51": [1, 2]}')
 
         # If this is a file, save it. If not, report back to the parent.
         if is_file:
