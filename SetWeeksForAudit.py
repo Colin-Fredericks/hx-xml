@@ -11,10 +11,10 @@ from glob import glob
 
 instructions = """
 To use:
-python3 SetWeeksForAudit.py path/to/course.xml (number) (options)
+python3 SetWeeksForAudit.py path/to/course.xml (options)
 
-Run this on a course folder, or a course.xml file inside an edX course folder (from export).
-Use the required --weeks # argument to set the number of sections
+Run this on an edX course folder from Studio's export.
+Use a --weeks # argument to set the number of sections (default 3)
 where all assignments will be visible to audit learners.
 
 This script may fail on courses with empty containers.
