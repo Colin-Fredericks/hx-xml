@@ -7,7 +7,6 @@ import argparse
 from bs4 import BeautifulSoup
 import lxml
 from glob import glob
-import unicodecsv as csv # https://pypi.python.org/pypi/unicodecsv/0.14.1
 
 
 instructions = """
@@ -53,15 +52,15 @@ gradeable_tags = [
 
 def getComponentInfo(folder, filename, child, week, args):
 
-    isFile = False
-    isGradeable = False
-    isInRightWeek = False
+    is_file = False
+    is_gradeable = False
+    is_in_right_week = False
 
     # Try to open file.
     try:
         tree = lxml.etree.parse(folder + '/' + filename + '.xml')
         root = tree.getroot()
-        isFile = True
+        is_file = True
     except OSError:
         # If we can't get a file, try to traverse inline XML.
         root = child
@@ -69,7 +68,7 @@ def getComponentInfo(folder, filename, child, week, args):
     temp = {
         'type': root.tag,
         'name': '',
-        # space for other info
+        # space for other info if needed
     }
 
     # get display_name or use placeholder
@@ -82,29 +81,27 @@ def getComponentInfo(folder, filename, child, week, args):
     temp['component'] = temp['name']
     # Remove any existing audit visibility for all gradeable items.
     if root.tag in gradeable_tags:
-        isGradeable = True
-        print('found gradeable tag: ' + temp['name'])
+        is_gradeable = True
         try:
             del root.attrib['group_access']
         except KeyError:
             pass
-        # If it's early enough in the course, set it to visible.
+        # If the component is early enough in the course, set it to visible.
         if week <= int(args.weeks):
-            isInRightWeek = True
+            is_in_right_week = True
             pass
             print('making ' + temp['name'] + ' visible.')
             # Group 51: paid access control. Options 1 and 2: limited and full access.
             root.set('group_access','{&quot;51&quot;: [1, 2]}')
 
         # If this is a file, save it. If not, report back to the parent.
-        if isFile:
+        if is_file:
             tree.write(os.path.join(folder, (filename + '.xml')), encoding='UTF-8', xml_declaration=False)
-            pass
 
     return {
         'contents': temp,
         'parent_name': temp['name'],
-        'was_gradeable_fragment': isGradeable and not isFile
+        'was_gradeable_fragment': is_gradeable and not is_file
     }
 
 
@@ -123,7 +120,7 @@ def drillDown(folder, filename, root, week, args):
     drill_down_info = getXMLInfo(folder, root, week, args)
     if drill_down_info:
         if drill_down_info['gradeable_children']:
-            print(drill_down_info['parent_name'] + ' in week ' + str(week) + ' has gradeable children, writing file.')
+            # Write files for containers with gradeable inline components.
             tree.write(os.path.join(folder, (filename + '.xml')), encoding='UTF-8', xml_declaration=False)
         return drill_down_info
     else:
@@ -263,13 +260,13 @@ def SetWeeksForAudit(args = ['-h']):
     for name in file_names:
         if os.path.isdir(name):
             if os.path.exists( os.path.join(name, 'course.xml')):
-                rootFileDir = name
+                root_file_directory = name
         else:
             if 'course.xml' in name:
-                rootFileDir = os.path.dirname(name)
+                root_file_directory = os.path.dirname(name)
 
-        rootFilePath = os.path.join(rootFileDir, 'course.xml')
-        course_tree = lxml.etree.parse(rootFilePath)
+        root_file_path = os.path.join(root_file_directory, 'course.xml')
+        course_tree = lxml.etree.parse(root_file_path)
 
         # Open course's root xml file
         # Get the current course run filename
@@ -283,7 +280,7 @@ def SetWeeksForAudit(args = ['-h']):
         }
 
         course_info = drillDown(
-            os.path.join(rootFileDir, course_dict['type']),
+            os.path.join(root_file_directory, course_dict['type']),
             course_dict['url_name'],
             course_root,
             0,
