@@ -20,7 +20,7 @@ where all assignments will be visible to audit learners.
 
 This script may fail on courses with empty containers.
 
-Last update: October 22nd, 2018
+Last update: November 1st, 2018
 """
 
 
@@ -85,7 +85,7 @@ def getComponentInfo(folder, filename, child, week, args):
         isGradeable = True
         print('found gradeable tag: ' + temp['name'])
         try:
-            del root.attrib['visibility']
+            del root.attrib['group_access']
         except KeyError:
             pass
         # If it's early enough in the course, set it to visible.
@@ -93,7 +93,8 @@ def getComponentInfo(folder, filename, child, week, args):
             isInRightWeek = True
             pass
             print('making ' + temp['name'] + ' visible.')
-            root.set('visibility','audit')
+            # Group 51: paid access control. Options 1 and 2: limited and full access.
+            root.set('group_access','{&quot;51&quot;: [1, 2]}')
 
         # If this is a file, save it. If not, report back to the parent.
         if isFile:
