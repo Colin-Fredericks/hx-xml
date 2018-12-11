@@ -11,7 +11,7 @@ from glob import glob
 
 instructions = """
 To use:
-python3 SetWeeksForAudit.py path/to/course.xml (options)
+python3 SetWeeksForAudit.py (options) path/to/course.xml
 
 Run this on an edX course folder from Studio's export.
 Use a --weeks # argument to set the number of sections (default 3)
@@ -19,7 +19,7 @@ where all assignments will be visible to audit learners.
 
 This script may fail on courses with empty containers.
 
-Last update: November 1st, 2018
+Last update: December 11th, 2018
 """
 
 
@@ -236,6 +236,7 @@ def SetWeeksForAudit(args = ['-h']):
     args, extra = parser.parse_known_args(args)
 
     if args.help: sys.exit(instructions)
+    print('setting ' + str(args.weeks) + ' weeks of content as visible.')
 
     # Replace arguments with wildcards with their expansion.
     # If a string does not contain a wildcard, glob will return it as is.
