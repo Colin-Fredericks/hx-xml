@@ -28,7 +28,6 @@ Last update: December 11th, 2018
 # These will be moved out as we improve the parsing.
 skip_tags = [
     'annotatable', # This is the older, deprecated annotation component.
-    'lti',  # This is the older, deprecated LTI component.
     'oppia',
     'poll_question', # This is the older, deprecated poll component.
     'problem-builder',
@@ -41,12 +40,13 @@ skip_tags = [
 gradeable_tags = [
         'drag-and-drop-v2',
         'imageannotation',
+        'lti',
         'lti_consumer',
         'openassessment',
         'problem',
         'textannotation',
         'ubcpi',
-        'videoannotation',
+        'videoannotation'
 ]
 
 
@@ -137,6 +137,7 @@ def getXMLInfo(folder, root, week, args):
         'html',
         'imageannotation',
         'library_content',
+        'lti',
         'lti_consumer',
         'openassessment',
         'poll',
