@@ -5,9 +5,10 @@ This is a bunch of batch tools to work directly with a course export (the file s
 
 Because python's built-in xml parser has trouble with namespaces and xpaths, some XML parsing is done with BeautifulSoup instead. It's included in this folder as `bs4`. BeautifulSoup requires `lxml` for XML parsing, so you'll need to install that, probably via `sudo pip3 install lxml`.
 
-* `SetWeeksForAudit.py`, which sets the number of sections in the course (starting from the beginning) in which *all* graded problems will be available to audit learners.
 * `SetMaxAttempts.py`, which sets the number of attempts automatically in every problem in a course.
+    * `SetMaxAttemptsIfGraded.py`, just like the last one but only works on problems with a non-zero weight.
 * `SetShowAnswer.py`, which sets the showanswer value automatically (or removes it) in every problem in a course.
+    * `SetShowAnswerIfGraded.py`, just like the last one but only works on problems with a non-zero weight.
 * `SetVideoDownloads.py`, which enables or disables video and/or transcript downloading for every video in a course.
 * `SRTTimeShifter.py`, which moves the subtitles in an SRT file forward or backward a specified number of seconds.
 * In the `outline_maker` folder there are a set of related items:
