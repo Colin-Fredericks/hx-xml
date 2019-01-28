@@ -19,6 +19,6 @@ Because python's built-in xml parser has trouble with namespaces and xpaths, som
     * Upload `hx-collapse-nav.js` and `hx-collapse-nav.css` to your Files & Uploads folder to complete the process.
     * If you want to show student scores next to each subsection, you should also upload `hx-grade-display.css` and `hx-grade-reader.js`, and add the following line of HTML (or something similar) near the top of your page: `<div id="progressbar">(Loading your scores <span class="fa fa-spinner fa-pulse fa-fw"></span>)</div>`
 
-If you're looking for `Make_Course_Sheet`, `Make_Link_Spreadsheet`, and all their friends, that's in the hx_util repository as a package rather than a pile of scripts.
+If you're looking for `Make_Course_Sheet`, `Make_Link_Spreadsheet`, and all their friends, that's in the [hx_util](https://github.com/Colin-Fredericks/hx_util) repository as a package rather than a pile of scripts.
 
-If you want `PrepAdaptiveProblems.py`, that's in the hx-adaptive repo.
+If you want `PrepAdaptiveProblems.py`, that's in the [hx-adaptive](https://github.com/Colin-Fredericks/hx-adaptive) repo.
