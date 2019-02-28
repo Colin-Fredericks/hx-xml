@@ -1,6 +1,5 @@
 import sys
 import os
-import html
 import csv
 import argparse
 from glob import glob
@@ -17,7 +16,7 @@ and creates an HTML snippet that will display a linked outline.
 Options:
   -h  Show this message and exit.
 
-Last update: May 4th, 2018
+Last update: Feb 28th, 2019
 """
 
 # For prettifying XML.
