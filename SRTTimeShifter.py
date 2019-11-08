@@ -1,6 +1,7 @@
 import sys
 import os
 import argparse
+import re
 from glob import glob
 
 instructions = """
@@ -30,32 +31,42 @@ def msecToHMS(time):
     msec = time % 1000
     time -= msec
     seconds = (time // 1000) % 60
-    time -= (seconds * 1000)
+    time -= seconds * 1000
     minutes = (time // 60 // 1000) % 60
-    time -= (minutes * 60 * 1000)
+    time -= minutes * 60 * 1000
     hours = (time // 1000 // 3600) % 24
 
     # Make sure we get enough zeroes.
-    if int(msec) == 0: msec = '000'
-    elif int(msec) < 10: msec = '00' + str(msec)
-    elif int(msec) < 100: msec = '0' + str(msec)
-    if int(seconds) == 0: seconds = '00'
-    elif int(seconds) < 10: seconds = '0' + str(seconds)
-    if int(minutes) == 0: minutes = '00'
-    elif int(minutes) < 10: minutes = '0' + str(minutes)
-    if int(hours) == 0: hours = '00'
-    elif int(hours) < 10: hours = '0' + str(hours)
+    if int(msec) == 0:
+        msec = "000"
+    elif int(msec) < 10:
+        msec = "00" + str(msec)
+    elif int(msec) < 100:
+        msec = "0" + str(msec)
+    if int(seconds) == 0:
+        seconds = "00"
+    elif int(seconds) < 10:
+        seconds = "0" + str(seconds)
+    if int(minutes) == 0:
+        minutes = "00"
+    elif int(minutes) < 10:
+        minutes = "0" + str(minutes)
+    if int(hours) == 0:
+        hours = "00"
+    elif int(hours) < 10:
+        hours = "0" + str(hours)
 
     # Send back a string
-    return str(hours) + ':' + str(minutes) + ':' + str(seconds) + ',' + str(msec)
+    return str(hours) + ":" + str(minutes) + ":" + str(seconds) + "," + str(msec)
+
 
 # Converts from hh:mm:ss,msec format to miliseconds
 def HMSTomsec(timestring):
     # Get hours, minutes, and seconds as individual strings
-    hours, minutes, seconds = timestring.split(':')
+    hours, minutes, seconds = timestring.split(":")
 
     # Convert the comma in seconds to a decimal
-    seconds = seconds.replace(',','.')
+    seconds = seconds.replace(",", ".")
 
     # Convert times to numbers
     hours = int(hours)
@@ -68,69 +79,86 @@ def HMSTomsec(timestring):
     # Send back an integer
     return msec
 
+
 # Opens our input and output files.
 def openFiles(name, seconds, args):
     completed = False
+    print(name)
 
     # Open the existing SRT file.
-    with open(name,'r') as inputFile:
+    with open(name, "r") as inputFile:
         # Open a new file to work with.
-        newname = name + '.new'
-        with open(newname, 'w') as outputFile:
+        newname = name + ".new"
+        with open(newname, "w") as outputFile:
             # With the files open, shift the times.
             completed = shiftTimes(inputFile, outputFile, name, seconds, args)
 
         # If we fail, we shouldn't leave a random file lying around.
-        if not completed: os.remove(newname)
+        if not completed:
+            os.remove(newname)
         return completed, newname
 
     # If we got here, we couldn't open the file I guess.
-    return False, 'error.srt'
+    return False, "error.srt"
+
 
 # Gets a list of dicts with all the entries from our original SRT file
 def getSRTEntries(inFile):
 
     SRTEntries = []
-    lastLine = ''
+    lastLine = ""
+    twoBack = ""
 
-    # Loop down the file, storing lines, until you find ' --> '
+    # Loop down the file, storing lines, until you find 'numbers --> numbers'
     for index, line in enumerate(inFile):
         entryData = {}
 
-        if ' --> ' in line:
+        if re.search("\d\d --> \d\d", line):
             # The line before that is the index.
-            entryData['index'] = int(lastLine)
+            try:
+                entryData["index"] = int(lastLine)
+            except ValueError:
+                # A missing blank line can cause this problem.
+                # Go one back to fix it.
+                line = lastLine
+                lastLine = twoBack
+
             # That line is the timecode. Store it in miliseconds.
-            entryData['start'] = HMSTomsec(line.split(' --> ')[0])
-            entryData['end'] = HMSTomsec(line.split(' --> ')[1])
+            entryData["start"] = HMSTomsec(line.split(" --> ")[0])
+            entryData["end"] = HMSTomsec(line.split(" --> ")[1])
             # Watch out for the end of the file.
             try:
                 # The next line is text1, and the one after is text2 or maybe blank.
-                entryData['text1'] = str(inFile.readline())
+                entryData["text1"] = str(inFile.readline())
                 # If text1 is blank, move on.
-                if entryData['text1'].strip() == '':
-                    entryData['text2'] = ''
+                if entryData["text1"].strip() == "":
+                    entryData["text2"] = ""
                     SRTEntries.append(entryData)
                     continue
-                entryData['text2'] = str(inFile.readline())
+                entryData["text2"] = str(inFile.readline())
             except StopIteration:
                 pass
 
             # Once we've gotten our info, add it to the list.
             SRTEntries.append(entryData)
 
+        twoBack = lastLine
         lastLine = line
 
     return SRTEntries
 
+
 # Writes a standard SRT entry into our output files.
 def writeEntry(outFile, entry, index):
-    outFile.write(str(index)+ '\n')
-    outFile.write(str(msecToHMS(entry['start'])) + ' --> ' + str(msecToHMS(entry['end'])) + '\n')
-    outFile.write(str(entry['text1']))
-    if ''.join(entry['text2'].split()) is not '':
-        outFile.write(str(entry['text2']))
-    outFile.write('\n')
+    outFile.write(str(index) + "\n")
+    outFile.write(
+        str(msecToHMS(entry["start"])) + " --> " + str(msecToHMS(entry["end"])) + "\n"
+    )
+    outFile.write(str(entry["text1"]))
+    if "".join(entry["text2"].split()) is not "":
+        outFile.write(str(entry["text2"]))
+    outFile.write("\n")
+
 
 # The core loop that calls the important stuff.
 def shiftTimes(inFile, outFile, name, seconds, args):
@@ -145,28 +173,28 @@ def shiftTimes(inFile, outFile, name, seconds, args):
     for i, entry in enumerate(SRTEntries):
 
         # If we're going positive:
-        if seconds > 0 and i==0:
+        if seconds > 0 and i == 0:
 
             # If there's already a blank 'padding' entry, extend it.
-            if entry['text1'].strip() == '':
-                entry['start'] = 0
-                entry['end'] += seconds * 1000
+            if entry["text1"].strip() == "":
+                entry["start"] = 0
+                entry["end"] += seconds * 1000
             # If not, add a blank entry at 0.
             else:
                 blankEntry = {
-                    'start': 0,
-                    'end': SRTEntries[i]['start'] + seconds * 1000,
-                    'index': 0,
-                    'text1': '',
-                    'text2': ''
+                    "start": 0,
+                    "end": SRTEntries[i]["start"] + seconds * 1000,
+                    "index": 0,
+                    "text1": "",
+                    "text2": "",
                 }
 
                 # Adjust the existing first entry.
-                entry['start'] += seconds * 1000
-                entry['end'] += seconds * 1000
+                entry["start"] += seconds * 1000
+                entry["end"] += seconds * 1000
 
         # If we're going negative:
-        elif seconds < 0 and i==0:
+        elif seconds < 0 and i == 0:
             # Check to see if we can shrink the first entry enough.
             # If we have enough time, shrink the first entry back.
             # If not, stop and throw an error message.
@@ -176,25 +204,33 @@ def shiftTimes(inFile, outFile, name, seconds, args):
             # print(entry['end'] > abs(seconds*1000))
 
             # If the first entry starts at or after our time, we're all good.
-            if entry['start'] > abs(seconds*1000):
-                entry['start'] += seconds * 1000
-                entry['end'] += seconds * 1000
-            elif entry['end'] == abs(seconds*1000):
+            if entry["start"] > abs(seconds * 1000):
+                entry["start"] += seconds * 1000
+                entry["end"] += seconds * 1000
+            elif entry["end"] == abs(seconds * 1000):
                 removeEntry = True
             # We might still be good if our first entry is blank. We can shrink it back.
-            elif entry['end'] > abs(seconds*1000) and entry['text1'].strip() == '':
-                entry['end'] += seconds*1000
+            elif entry["end"] > abs(seconds * 1000) and entry["text1"].strip() == "":
+                entry["end"] += seconds * 1000
             # But if not, we can't change this file.
             else:
-                print('Cannot shift ' + name + '. First subtitle is before ' + str(-seconds) + ' seconds.')
+                print(
+                    "Cannot shift "
+                    + name
+                    + ". First subtitle is before "
+                    + str(-seconds)
+                    + " seconds."
+                )
                 return False
 
-        if i>0:
-            entry['start'] += seconds * 1000
-            entry['end'] += seconds * 1000
+        if i > 0:
+            entry["start"] += seconds * 1000
+            entry["end"] += seconds * 1000
 
-    if blankEntry: SRTEntries.insert(0, blankEntry)
-    if removeEntry: del SRTEntries[0]
+    if blankEntry:
+        SRTEntries.insert(0, blankEntry)
+    if removeEntry:
+        del SRTEntries[0]
 
     # Write the file.
     for i, entry in enumerate(SRTEntries):
@@ -202,15 +238,16 @@ def shiftTimes(inFile, outFile, name, seconds, args):
 
     return True
 
+
 # Takes in arguments and runs the shifter on each file.
 def SRTTimeShifter(args):
 
     # Handle arguments and flags
     parser = argparse.ArgumentParser(usage=instructions, add_help=False)
-    parser.add_argument('--help', '-h', action='store_true')
-    parser.add_argument('-o', action='store_true')
-    parser.add_argument('file_names', nargs='*')
-    parser.add_argument('seconds', action='store')
+    parser.add_argument("--help", "-h", action="store_true")
+    parser.add_argument("-o", action="store_true")
+    parser.add_argument("file_names", nargs="*")
+    parser.add_argument("seconds", action="store")
 
     args = parser.parse_args(args)
 
@@ -230,28 +267,29 @@ def SRTTimeShifter(args):
 
     # If the filenames don't exist, say so and quit.
     if file_names == []:
-        sys.exit('No file or directory found by that name.')
+        sys.exit("No file or directory found by that name.")
 
-    if args.help: sys.exit(instructions)
+    if args.help:
+        sys.exit(instructions)
 
     fileCount = 0
 
     # If we're not shifting anything, just return.
     if seconds == 0:
-        print('Zero second shift - no files changed.')
+        print("Zero second shift - no files changed.")
         return False
 
     # Convert every file we're passed.
     for name in file_names:
         # Make sure single files exist.
         if not os.path.exists(name):
-            print('File or directory not found: ' + name)
+            print("File or directory not found: " + name)
             return
 
         # If it's just a file...
         if os.path.isfile(name):
             # Make sure this is an srt file (just check extension)
-            if name.lower().endswith('.srt'):
+            if name.lower().endswith(".srt"):
                 # Open that file and shift the times in that file
                 completed, newname = openFiles(name, seconds, args)
                 if completed:
@@ -259,15 +297,25 @@ def SRTTimeShifter(args):
                     if args.o:
                         os.remove(name)
                     else:
-                        os.rename(name, name + '.old')
+                        os.rename(name, name + ".old")
                     os.rename(newname, name)
                     fileCount += 1
 
     # Finish by saying how many files we shifted.
     if fileCount > 0:
-        plFiles = 'file' if fileCount == 1 else 'files'
-        plSeconds = 'second' if seconds == 1 else 'seconds'
-        print('Shifted ' + str(fileCount) + ' ' + plFiles + ' by ' + str(seconds) + ' ' + plSeconds + '.')
+        plFiles = "file" if fileCount == 1 else "files"
+        plSeconds = "second" if seconds == 1 else "seconds"
+        print(
+            "Shifted "
+            + str(fileCount)
+            + " "
+            + plFiles
+            + " by "
+            + str(seconds)
+            + " "
+            + plSeconds
+            + "."
+        )
 
 
 if __name__ == "__main__":
