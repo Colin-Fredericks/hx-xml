@@ -155,7 +155,7 @@ def writeEntry(outFile, entry, index):
         str(msecToHMS(entry["start"])) + " --> " + str(msecToHMS(entry["end"])) + "\n"
     )
     outFile.write(str(entry["text1"]))
-    if "".join(entry["text2"].split()) is not "":
+    if "".join(entry["text2"].split()) != "":
         outFile.write(str(entry["text2"]))
     outFile.write("\n")
 
