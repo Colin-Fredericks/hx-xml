@@ -1,7 +1,7 @@
 import xml.etree.ElementTree as ET
 import sys
 import os
-import unicodecsv as csv  # https://pypi.python.org/pypi/unicodecsv/0.14.1
+import csv
 import argparse
 
 instructions = """
@@ -17,7 +17,7 @@ You can specify the following options:
 
 This script may fail on courses with empty containers.
 
-Last modified: May 4th, 2018
+Last modified: December 11th, 2019
 """
 
 # Note that we're not including any containers below the verticals, like A/B tests.
