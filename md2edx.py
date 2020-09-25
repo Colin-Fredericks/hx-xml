@@ -81,8 +81,8 @@ def Convert_From_Markdown(args=["-h"]):
     for name in file_names:
         if name[-3:] == ".md":
             # print(name)
-            # Open the file
-            f = open(name)
+            # Open the file. Need encoding to avoid nonprinting byte order mark.
+            f = open(name, encoding="utf-8-sig")
             # Get its contents
             md = f.read()
             # Convert it to html
