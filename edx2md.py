@@ -27,6 +27,8 @@ Last update: August 18th 2020
 # Main function
 def Convert_To_Markdown(args=["-h"]):
 
+    print(" Beginning conversion")
+
     # Handle arguments and flags
     parser = argparse.ArgumentParser(usage=instructions, add_help=False)
     parser.add_argument("--help", "-h", action="store_true")
@@ -54,9 +56,17 @@ def Convert_To_Markdown(args=["-h"]):
     if sys.argv[0] in file_names:
         file_names.remove(sys.argv[0])
 
+    # If one of the items is a folder, get its contents instead.
+    interior_files = list()
+    for f in file_names:
+        if os.path.isdir(f):
+            interior_files += glob.glob(f + "/*.html")
+            file_names.remove(f)
+    file_names += interior_files
+
     # If the filenames don't exist, say so and quit.
     if file_names == []:
-        sys.exit("No file or directory found by that name.")
+        sys.exit("No HTML files found.")
 
     # Make a directory to store the markdown files in.
     html_folder = os.path.dirname(file_names[0])
@@ -68,7 +78,7 @@ def Convert_To_Markdown(args=["-h"]):
     # Get all the HTML files.
     for name in file_names:
         if name[-5:] == ".html":
-            print(name)
+            # print(name)
             new_name = name[:-5] + ".md"
             # Open the file
             f = open(name)
@@ -77,10 +87,14 @@ def Convert_To_Markdown(args=["-h"]):
             # Convert it to markdown
             md = markdownify(html)
             # Save the new file in the folder.
-            new_file = open(os.path.join(html_folder, md_folder, new_name), "w")
+            new_file = open(
+                os.path.join(html_folder, "markdown", os.path.basename(new_name)), "w"
+            )
             new_file.write(md)
             new_file.close()
             f.close()
+
+    print(" Conversion complete")
 
 
 if __name__ == "__main__":
