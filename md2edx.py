@@ -80,7 +80,7 @@ def Convert_From_Markdown(args=["-h"]):
     # Get all the markdown files.
     for name in file_names:
         if name[-3:] == ".md":
-            # print(name)
+            print(name)
             # Open the file. Need encoding to avoid nonprinting byte order mark.
             f = open(name, encoding="utf-8-sig")
             # Get its contents
