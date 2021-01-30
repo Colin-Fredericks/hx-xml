@@ -3,7 +3,7 @@ HX-PY Course Outline Maker
 
 Do you want a linked outline of your course that also shows student grades and can be filtered to show specific concepts or materials? Sure, we all do! Here's how to do it. It'll take a few hours, mostly in the actual categorization of the course materials.
 
-These are Python 2 scripts.
+These are Python 3 scripts.
 
 * First, get the `unicodecsv` folder, which you should download and keep in the same folder with the python scripts.
 * Run `Make_Course_Outline.py` on your course export to create a TSV (tab-separated value) file with an outline of your course.
