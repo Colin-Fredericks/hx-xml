@@ -2,6 +2,7 @@ import os
 import sys
 import math
 import tarfile
+import argparse
 from datetime import date
 
 instructions = """
@@ -22,17 +23,19 @@ Options:
 Last update: Jan 30th 2021
 """
 
-# Read in the filename
+# Read in the filename and options
 
 parser = argparse.ArgumentParser(usage=instructions, add_help=False)
+parser.add_argument("filename", default="course.tar.gz")
+parser.add_argument("run", nargs="?", default=None)
 parser.add_argument("-h", "--help", action="store_true")
 parser.add_argument("-d", "--dates", action="store_true")
-parser.add_argument("run", default=None)
-parser.add_argument("filename", default="course.tar.gz")
+
 
 args = parser.parse_args()
 if args.help:
     sys.exit(instructions)
+print(args)
 
 # Prompt for start and end dates.
 if args.dates:
@@ -52,6 +55,9 @@ if not os.path.exists(args.filename):
     sys.exit("Filename not found: " + args.filename)
 
 # Open the tarball.
+tar = tarfile.open(args.filename)
+for member in tar.getmembers():
+    print(member)
 
 # Get the current course_run for future use.
 
@@ -70,3 +76,6 @@ if not os.path.exists(args.filename):
 
 # Find all instances of course_run in XML and HTML files,
 # and replace them with the new one.
+
+# Clean up
+tarfile.close()
