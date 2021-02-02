@@ -1,6 +1,8 @@
 import os
+import re
 import sys
 import math
+import shutil
 import tarfile
 import argparse
 from datetime import date
@@ -35,7 +37,6 @@ parser.add_argument("-d", "--dates", action="store_true")
 args = parser.parse_args()
 if args.help:
     sys.exit(instructions)
-print(args)
 
 # Prompt for start and end dates.
 if args.dates:
@@ -49,21 +50,43 @@ if args.dates:
 # Use current quarter to set default run identifier.
 if args.run is None:
     today = date.today()
-    args.run = str(math.ceil(today.month / 3)) + "T" + str(today.year)
+    new_run = str(math.ceil(today.month / 3)) + "T" + str(today.year)
+else:
+    new_run = args.run
 
 if not os.path.exists(args.filename):
     sys.exit("Filename not found: " + args.filename)
+pathname = os.path.dirname(args.filename)
 
-# Open the tarball.
+# Make a copy of the tarball for backup purposes
+shutil.copy2(args.filename, args.filename[:-7] + "_backup.tar.gz")
+
+# Extract the tarball.
 tar = tarfile.open(args.filename)
-for member in tar.getmembers():
-    print(member)
+tar.extractall(pathname)
+tar.close()
 
-# Get the current course_run for future use.
+# Get the old course_run for future use.
+root_filename = "course/course.xml"
+
+root_text = ""
+old_run = ""
+
+with open(os.path.join(pathname, root_filename), "r") as root_file:
+    root_text = root_file.read()
 
 # Change the /course.xml file to point to the new run.
+with open(os.path.join(pathname, root_filename), "w") as root_file:
+    match_object = re.search('url_name="(.+?)"', root_text)
+    old_run = match_object.group(1)
+    new_root_text = root_text.replace(old_run, new_run)
+    root_file.write(new_root_text)
 
-# Rename the courses/course_run.xml file
+
+# Rename the course/course_run.xml file
+runfile = os.path.join(pathname, "course", old_run + ".xml")
+os.rename(runfile, os.path.join(pathname, new_run + ".xml"))
+
 # Check for optional xml attributes. If they exist...
 # Set the start and end dates.
 
@@ -77,5 +100,4 @@ for member in tar.getmembers():
 # Find all instances of course_run in XML and HTML files,
 # and replace them with the new one.
 
-# Clean up
-tarfile.close()
+# Re-tar
