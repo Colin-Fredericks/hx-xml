@@ -39,7 +39,8 @@ if args.help:
     sys.exit(instructions)
 
 # Prompt for start and end dates.
-if args.dates:
+use_new_dates = args.dates
+if use_new_dates:
     start_date = input("Start date (yyyy-mm-dd) = ")
     start_time = input("Start time (24h:min:sec) = ")
     end_date = input("End date (yyyy-mm-dd) = ")
@@ -87,7 +88,7 @@ with open(os.path.join(pathname, root_filename), "w") as root_file:
 runfile = os.path.join(pathname, "course", old_run + ".xml")
 os.rename(runfile, os.path.join(pathname, new_run + ".xml"))
 
-# Check for optional xml attributes. If they exist...
+# Check for optional xml attributes on course/course_run.xml. If they exist...
 # Set the start and end dates.
 
 # Rename the policies/course_run folder
@@ -96,6 +97,8 @@ os.rename(runfile, os.path.join(pathname, new_run + ".xml"))
 # Clear any discussion blackouts.
 # Set the start and end dates
 # Set the xml_attributes:filename
+
+# Update ORAs to use flexible grading.
 
 # Find all instances of course_run in XML and HTML files,
 # and replace them with the new one.
