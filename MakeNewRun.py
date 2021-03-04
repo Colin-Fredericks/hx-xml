@@ -9,14 +9,13 @@ from datetime import date
 
 instructions = """
 To use:
-python3 MakeNewRun.py coursefile.tar.gz (run_id) (options)
+python3 MakeNewRun.py coursefile.tar.gz run_id (options)
 
 This script takes an existing course tarball and creates a new one,
 named coursefile.new.tar.gz , with hardcoded links, folders, and filenames
 updated for the new run.
 
 The run_id will be something like 1T2077.
-It defaults to the current quarter and year.
 
 Options:
   -d  Prompt for new dates for start/end of course.
@@ -29,7 +28,7 @@ Last update: Jan 30th 2021
 
 parser = argparse.ArgumentParser(usage=instructions, add_help=False)
 parser.add_argument("filename", default="course.tar.gz")
-parser.add_argument("run", nargs="?", default=None)
+parser.add_argument("run", default=None)
 parser.add_argument("-h", "--help", action="store_true")
 parser.add_argument("-d", "--dates", action="store_true")
 
@@ -47,13 +46,7 @@ if use_new_dates:
     end_time = input("End time (24h:min:sec) = ")
     course_start = start_date + "T" + start_time + "Z"
     course_end = end_date + "T" + end_time + "Z"
-
-# Use current quarter to set default run identifier.
-if args.run is None:
-    today = date.today()
-    new_run = str(math.ceil(today.month / 3)) + "T" + str(today.year)
-else:
-    new_run = args.run
+    # Are any of these in the past? Flag that.
 
 if not os.path.exists(args.filename):
     sys.exit("Filename not found: " + args.filename)
@@ -80,13 +73,13 @@ with open(os.path.join(pathname, root_filename), "r") as root_file:
 with open(os.path.join(pathname, root_filename), "w") as root_file:
     match_object = re.search('url_name="(.+?)"', root_text)
     old_run = match_object.group(1)
-    new_root_text = root_text.replace(old_run, new_run)
+    new_root_text = root_text.replace(old_run, args.run)
     root_file.write(new_root_text)
 
 
 # Rename the course/course_run.xml file
 runfile = os.path.join(pathname, "course", old_run + ".xml")
-os.rename(runfile, os.path.join(pathname, new_run + ".xml"))
+os.rename(runfile, os.path.join(pathname, args.run + ".xml"))
 
 # Check for optional xml attributes on course/course_run.xml. If they exist...
 # Set the start and end dates.
@@ -96,11 +89,30 @@ os.rename(runfile, os.path.join(pathname, new_run + ".xml"))
 # Set the root to "course/current_run"
 # Clear any discussion blackouts.
 # Set the start and end dates
-# Set the xml_attributes:filename
+# Set the xml_attributes:filename using new course_run
 
 # Update ORAs to use flexible grading.
+# Shift deadlines for ORAs to match new start date.
+
+# Update "Related Courses" page to use new edX search terms.
+# Update the FAQ page.
+# Pull new version of hx.js and update
 
 # Find all instances of course_run in XML and HTML files,
 # and replace them with the new one.
 
 # Re-tar
+
+# Create high-level summary of course:
+# New coure run identifier
+# New start date is:
+# Instructor vs. self-paced
+# N weeks have highlights set
+# What percentage of content is gated?
+# What percentage of videos and transcripts are not downloadable?
+# Summarize LTI tools & keys
+# Do we still have Flash in this course?
+# Do we have javascript that tries to access the top tabs?
+# List all links to the forums and where they appear in the course.
+# Anything else?
+# Post or e-mail this somewhere so we keep a record.
