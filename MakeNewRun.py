@@ -111,8 +111,10 @@ os.rename(runfile, os.path.join(pathname, args.run + ".xml"))
 # What percentage of content is gated?
 # What percentage of videos and transcripts are not downloadable?
 # Summarize LTI tools & keys
+# Number of ORA
 # Do we still have Flash in this course?
 # Do we have javascript that tries to access the top tabs?
-# List all links to the forums and where they appear in the course.
+# How many discussion components are there?
+# Also, list all links to the forums and where they appear in the course.
 # Anything else?
 # Post or e-mail this somewhere so we keep a record.
