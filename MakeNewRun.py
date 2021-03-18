@@ -26,6 +26,11 @@ Last update: Jan 30th 2021
 
 # Read in the filename and options
 
+###########################
+# ADD TO ARGUMENTS:
+# JSON file for command-line arguments, including anything we'd normally prompt for.
+###########################
+
 parser = argparse.ArgumentParser(usage=instructions, add_help=False)
 parser.add_argument("filename", default="course.tar.gz")
 parser.add_argument("run", default=None)
