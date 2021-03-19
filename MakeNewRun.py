@@ -110,7 +110,11 @@ runfolder = os.path.join(pathname, "policies", old_run)
 os.rename(runfolder, os.path.join(pathname, "policies", new_run))
 
 
-# Open policies/course_run/policies.json
+# Open policies/course_run/policy.json
+data = []
+with open(os.path.join(pathname, "policies", new_run, "policy.json")) as f:
+    data.append(json.load(f))
+
 # Set the root to "course/current_run"
 # Clear any discussion blackouts.
 # Set the start and end dates
