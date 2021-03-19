@@ -6,6 +6,7 @@ import shutil
 import tarfile
 import argparse
 from datetime import date
+import xml.etree.ElementTree as ET
 
 instructions = """
 To use:
@@ -51,7 +52,7 @@ if use_new_dates:
     end_time = input("End time (24h:min:sec) = ")
     course_start = start_date + "T" + start_time + "Z"
     course_end = end_date + "T" + end_time + "Z"
-    # Are any of these in the past? Flag that.
+    # TODO: Are any of these in the past? Flag that.
 
 if not os.path.exists(args.filename):
     sys.exit("Filename not found: " + args.filename)
@@ -70,34 +71,61 @@ root_filename = "course/course.xml"
 
 root_text = ""
 old_run = ""
+new_run = args.run
 
+#########################
+# Course base files
+#########################
+
+# Change the /course.xml file to point to the new run.
+# Open to read
 with open(os.path.join(pathname, root_filename), "r") as root_file:
     root_text = root_file.read()
 
-# Change the /course.xml file to point to the new run.
+# Open to write
 with open(os.path.join(pathname, root_filename), "w") as root_file:
     match_object = re.search('url_name="(.+?)"', root_text)
     old_run = match_object.group(1)
-    new_root_text = root_text.replace(old_run, args.run)
+    new_root_text = root_text.replace(old_run, new_run)
     root_file.write(new_root_text)
-
 
 # Rename the course/course_run.xml file
 runfile = os.path.join(pathname, "course", old_run + ".xml")
-os.rename(runfile, os.path.join(pathname, args.run + ".xml"))
+os.rename(runfile, os.path.join(pathname, new_run + ".xml"))
 
-# Check for optional xml attributes on course/course_run.xml. If they exist...
-# Set the start and end dates.
+# Set the start and end dates in xml attributes on course/course_run.xml
+run_file = os.path.join(pathname, 'course', new_run + ".xml")
+tree = ET.parserun_file
+root = tree.getroot()
+root.set('start', course_start)
+tree.write(run_file, encoding='UTF-8', xml_declaration=False)
+
+
+#########################
+# Policies folder
+##########################
 
 # Rename the policies/course_run folder
+runfolder = os.path.join(pathname, "policies", old_run)
+os.rename(runfolder, os.path.join(pathname, "policies", new_run))
+
+
 # Open policies/course_run/policies.json
 # Set the root to "course/current_run"
 # Clear any discussion blackouts.
 # Set the start and end dates
 # Set the xml_attributes:filename using new course_run
 
+################################
+# Open Response Assessments
+################################
+
 # Update ORAs to use flexible grading.
 # Shift deadlines for ORAs to match new start date.
+
+################################
+# Boilerplate Updates
+################################
 
 # Update "Related Courses" page to use new edX search terms.
 # Update the FAQ page.
@@ -107,6 +135,10 @@ os.rename(runfile, os.path.join(pathname, args.run + ".xml"))
 # and replace them with the new one.
 
 # Re-tar
+
+################################
+# High-level summary
+################################
 
 # Create high-level summary of course:
 # New coure run identifier
