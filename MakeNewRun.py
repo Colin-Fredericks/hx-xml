@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import json
 import math
 import shutil
 import tarfile
@@ -45,13 +46,16 @@ if args.help:
 
 # Prompt for start and end dates.
 use_new_dates = args.dates
+new_start = ""
+new_end = ""
+# TODO: Allow command-line or file-driven entry of dates & times
 if use_new_dates:
     start_date = input("Start date (yyyy-mm-dd) = ")
     start_time = input("Start time (24h:min:sec) = ")
     end_date = input("End date (yyyy-mm-dd) = ")
     end_time = input("End time (24h:min:sec) = ")
-    course_start = start_date + "T" + start_time + "Z"
-    course_end = end_date + "T" + end_time + "Z"
+    new_start = start_date + "T" + start_time + "Z"
+    new_end = end_date + "T" + end_time + "Z"
     # TODO: Are any of these in the past? Flag that.
 
 if not os.path.exists(args.filename):
@@ -66,12 +70,15 @@ tar = tarfile.open(args.filename)
 tar.extractall(pathname)
 tar.close()
 
-# Get the old course_run for future use.
 root_filename = "course/course.xml"
-
 root_text = ""
+
 old_run = ""
 new_run = args.run
+lti_passports = []
+faq_filename = ""
+course_name = ""
+course_pacing = ""
 
 #########################
 # Course base files
@@ -89,16 +96,28 @@ with open(os.path.join(pathname, root_filename), "w") as root_file:
     new_root_text = root_text.replace(old_run, new_run)
     root_file.write(new_root_text)
 
+    # And save the course name for later.
+    match_object = re.search('course="(.+?)"', root_text)
+    course_name = match_object.group(1)
+
 # Rename the course/course_run.xml file
 runfile = os.path.join(pathname, "course", old_run + ".xml")
 os.rename(runfile, os.path.join(pathname, new_run + ".xml"))
 
 # Set the start and end dates in xml attributes on course/course_run.xml
-run_file = os.path.join(pathname, 'course', new_run + ".xml")
+run_file = os.path.join(pathname, "course", new_run + ".xml")
 tree = ET.parserun_file
 root = tree.getroot()
-root.set('start', course_start)
-tree.write(run_file, encoding='UTF-8', xml_declaration=False)
+root.set("start", new_start)
+root.set("end", new_end)
+
+# Items to track for later:
+course_pacing = (
+    "self-paced" if root.attrib["self_paced"] == "true" else "instructor-paced"
+)
+
+# Write that file, done with it.
+tree.write(run_file, encoding="UTF-8", xml_declaration=False)
 
 
 #########################
@@ -109,16 +128,30 @@ tree.write(run_file, encoding='UTF-8', xml_declaration=False)
 runfolder = os.path.join(pathname, "policies", old_run)
 os.rename(runfolder, os.path.join(pathname, "policies", new_run))
 
-
+# TODO: Existence checks for a lot of these.
 # Open policies/course_run/policy.json
-data = []
+data = dict()
 with open(os.path.join(pathname, "policies", new_run, "policy.json")) as f:
-    data.append(json.load(f))
+    data = json.load(f)
 
-# Set the root to "course/current_run"
-# Clear any discussion blackouts.
-# Set the start and end dates
-# Set the xml_attributes:filename using new course_run
+    # Set the root to "course/new_run"
+    data["course/" + new_run] = data["course/" + old_run]
+    del data["course/" + old_run]
+    # Clear any discussion blackouts.
+    data["course/" + new_run]["discussion_blackouts"] = []
+    # Set the start and end dates
+    data["course/" + new_run]["start"] = new_start
+    data["course/" + new_run]["end"] = new_end
+    # Set the xml_attributes:filename using new_run
+    data["xml_attributes"]["filename"] = ["course/" + new_run]
+    # A few other default settings
+    data["days_early_for_beta"] = 100.0
+
+    # Items to handle later
+    lti_passports = data["lti_passports"]
+    faq_filename = [x["url_slug"] for x in tabs if "FAQ" in x["name"]][0]
+    display_name = data["display_name"]
+
 
 ################################
 # Open Response Assessments
@@ -144,18 +177,32 @@ with open(os.path.join(pathname, "policies", new_run, "policy.json")) as f:
 # High-level summary
 ################################
 
-# Create high-level summary of course:
-# New coure run identifier
-# New start date is:
-# Instructor vs. self-paced
-# N weeks have highlights set
-# What percentage of content is gated?
-# What percentage of videos and transcripts are not downloadable?
-# Summarize LTI tools & keys
-# Number of ORA
-# Do we still have Flash in this course?
-# Do we have javascript that tries to access the top tabs?
-# How many discussion components are there?
-# Also, list all links to the forums and where they appear in the course.
+# Create high-level summary of course as takeaway file.
+with open(os.path.join(pathname, course_name + "_" + new_run + ".txt"), a) as summary:
+    txt = ""
+    txt += "Course Summary\n--------------\n\n"
+    txt += "Identifier: " + display_name + " " + new_run + "\n"
+    txt += "New Start: " + new_start
+    txt += "New End: " + new_end
+    txt += "Pacing: " + course_pacing
+
+    # N weeks have highlights set
+    # What percentage of content is gated?
+    # What percentage of videos and transcripts are not downloadable?
+
+    # Summarize LTI tools & keys
+    # TODO: better formatting
+    txt += lti_passports
+
+    # Number of ORA
+    # Do we still have Flash in this course?
+    # Do we have javascript that tries to access the top tabs?
+    # How many discussion components are there?
+    # Also, list all links to the forums and where they appear in the course.
+
+    print(txt)
+    summary.write(txt)
+
 # Anything else?
+
 # Post or e-mail this somewhere so we keep a record.
