@@ -171,6 +171,49 @@ with open(os.path.join(pathname, "policies", new_run, "policy.json")) as f:
 # Find all instances of course_run in XML and HTML files,
 # and replace them with the new one.
 
+################################
+# Chapter scraping
+################################
+
+# Open everything in the chapter/ folder
+# How many chapters have weekly highlights set?
+
+################################
+# Vertical scraping
+################################
+
+# Open everything in the vertical/ folder
+# Count the number of all the component types in the course.
+# Especially need: ORA, LTI, discussion
+
+################################
+# Video scraping
+################################
+
+# Open everything in the video/ folder
+# Are any videos still pointing to YouTube?
+# What % of videos are downloadable?
+
+################################
+# Problem scraping
+################################
+
+# Open everything in the problem/ folder
+# Count the number of problems of each assignment type
+# What % of content is gated?
+
+################################
+# HTML scraping
+################################
+
+# Open everything in the html/ folder
+# How many iframes?
+# Any Flash?
+# Any javascript that targets the top tabs?
+# Any links to the discussion boards?
+# For all of these, if so, where?
+
+
 # Re-tar
 
 ################################
