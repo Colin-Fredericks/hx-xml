@@ -154,13 +154,6 @@ with open(os.path.join(pathname, "policies", new_run, "policy.json")) as f:
 
 
 ################################
-# Open Response Assessments
-################################
-
-# Update ORAs to use flexible grading.
-# Shift deadlines for ORAs to match new start date.
-
-################################
 # Boilerplate Updates
 ################################
 
@@ -175,46 +168,190 @@ with open(os.path.join(pathname, "policies", new_run, "policy.json")) as f:
 # Chapter scraping
 ################################
 
-# Open everything in the chapter/ folder
 # How many chapters have weekly highlights set?
+# Open everything in the chapter/ folder
+num_highlights = 0
+num_chapters = 0
+for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "chapter")):
+    for eachfile in filenames:
+
+        # Get the XML for each file
+        tree = ET.parse(os.path.join(dirpath, eachfile))
+        root = tree.getroot()
+
+        # If there's a highlights attribute set, then there are highlights.
+        # If not, then no.
+        if root.attrib[highlights]:
+            num_highlights += 1
+
+        num_chapters += 1
+
 
 ################################
 # Vertical scraping
 ################################
 
-# Open everything in the vertical/ folder
 # Count the number of all the component types in the course.
 # Especially need: ORA, LTI, discussion
+component_count = {}
+# Open everything in the vertical/ folder
+for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "vertical")):
+    for eachfile in filenames:
+
+        # Get the XML for each file
+        tree = ET.parse(os.path.join(dirpath, eachfile))
+        root = tree.getroot()
+
+        # get children and count how many we have
+        for child in root:
+            if component_count[child.tag]:
+                component_count[child.tag] = component_count[child.tag] + 1
+            else:
+                component_count[child.tag] = 1
+
+        ################################
+        # Open Response Assessments
+        ################################
+
+        # These are all inline in the verticals (hopefully)
+        # Update ORAs to use flexible grading.
+        # Shift deadlines for ORAs to match new start date.
+
 
 ################################
 # Video scraping
 ################################
 
-# Open everything in the video/ folder
 # Are any videos still pointing to YouTube?
 # What % of videos are downloadable?
+
+num_videos = 0
+youtube_videos = 0
+num_videos = 0
+num_downloadable_videos = 0
+num_downloadable_transcripts = 0
+# Open everything in the video/ folder
+for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "video")):
+    for eachfile in filenames:
+
+        # Get the XML for each file
+        tree = ET.parse(os.path.join(dirpath, eachfile))
+        root = tree.getroot()
+
+        if root.attrib["youtube_id_1_0"]:
+            if root.attrib["youtube_id_1_0"] != "":
+                youtube_videos += 1
+        if root.attrib["download_video"]:
+            if root.attrib["download_video"] == "true":
+                num_downloadable_videos += 1
+        if root.attrib["download_track"]:
+            if root.attrib["download_track"] == "true":
+                num_downloadable_transcripts += 1
+
+        num_videos += 1
+
+percent_downloadable_vid = num_downloadable_videos / num_videos
+percent_downloadable_trans = num_downloadable_transcripts / num_videos
+
 
 ################################
 # Problem scraping
 ################################
 
-# Open everything in the problem/ folder
 # Count the number of problems of each assignment type
 # What % of content is gated?
+num_problems = 0
+num_ungated_problems = 0
+num_solutions = 0
+problem_types = [
+    "choiceresponse",
+    "customresponse",
+    "optioninput",
+    "numericalresponse",
+    "multiplechoiceresponse",
+    "stringresponse",
+    "formularesponse",
+]
+problem_type_count = {
+    "choiceresponse": 0,
+    "customresponse": 0,
+    "optioninput": 0,
+    "numericalresponse": 0,
+    "multiplechoiceresponse": 0,
+    "stringresponse": 0,
+    "formularesponse": 0,
+}
+problem_type_translator = {
+    "choiceresponse": "checkbox",
+    "customresponse": "custom input",
+    "optioninput": "dropdown",
+    "numericalresponse": "numerical",
+    "multiplechoiceresponse": "multiple-choice",
+    "stringresponse": "text",
+    "formularesponse": "math formula",
+}
+
+# Open everything in the problem/ folder
+for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "problem")):
+    for eachfile in filenames:
+
+        # Get the XML for each file
+        tree = ET.parse(os.path.join(dirpath, eachfile))
+        root = tree.getroot()
+
+        if root.attrib["group_access"]:
+            if root.attrib["group_access"] == "{&quot;51&quot;: [1, 2]}":
+                num_ungated_problems += 1
+
+        # Check for specific problem types and count them.
+        # They won't be at a reliable depth in the problem XML,
+        # So we need to dump the full problem file text to get them.
+        problem_text = ET.tostring(tree.getroot(), encoding="utf-8", method="text")
+        for t in problem_types:
+            if t in problem_text:
+                problem_type_count[t] = problem_type_count[t] + 1
+
+        num_problems += 1
 
 ################################
 # HTML scraping
 ################################
 
-# Open everything in the html/ folder
-# How many iframes?
-# Any Flash?
-# Any javascript that targets the top tabs?
-# Any links to the discussion boards?
 # For all of these, if so, where?
+we_got_trouble = {
+    "discussion_links": [],  # Any links to the discussion boards?
+    "flash_links": [],  # Any Flash?
+    "top_tab_js": [],  # Any javascript that targets the top tabs?
+    "iframes": [],  # Any iframes?
+}
 
+# Open everything in the html/ folder
+for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "html")):
+    html_files = [x for x in filenames if x[-5:] == ".html"]
+    for eachfile in html_files:
+
+        with open(eachfile, mode="r") as h:
+            # Get the whole-file text so we can search it:
+            txt = file.read(h)
+
+            if "<iframe" in txt:
+                we_got_trouble["iframe"].append(eachfile)
+            if ".swf" in txt:
+                we_got_trouble["flash_links"].append(eachfile)
+            if "/discusison/forum" in txt:
+                we_got_trouble["discussion_links"].append(eachfile)
+            if (
+                "$('.navbar')" in txt
+                or "$('.course-tabs')" in txt
+                or "$('.navbar-nav')" in txt
+                or '$(".navbar")' in txt  # double OR single quotes
+                or '$(".course-tabs")' in txt
+                or '$(".navbar-nav")' in txt
+            ):
+                we_got_trouble["top_tab_js"].append(eachfile)
 
 # Re-tar
+
 
 ################################
 # High-level summary
@@ -223,25 +360,51 @@ with open(os.path.join(pathname, "policies", new_run, "policy.json")) as f:
 # Create high-level summary of course as takeaway file.
 with open(os.path.join(pathname, course_name + "_" + new_run + ".txt"), a) as summary:
     txt = ""
-    txt += "Course Summary\n--------------\n\n"
+    txt += "Course Summary\n"
+    txt += "--------------\n"
+    txt += "\n"
     txt += "Identifier: " + display_name + " " + new_run + "\n"
-    txt += "New Start: " + new_start
-    txt += "New End: " + new_end
-    txt += "Pacing: " + course_pacing
+    txt += "New Start: " + new_start + "\n"
+    txt += "New End: " + new_end + "\n"
+    txt += "Pacing: " + course_pacing + "\n"
+    txt += "\n"
+    txt += "Number of sections: " + num_chapters + "\n"
+    txt += "Highlights set for " + num_highlights + " sections" + "\n"
+    txt += "\n"
+    txt += "Number of videos: " + num_chapters + "\n"
+    txt += "Downloadable videos: " + num_downloadable_videos + "\n"
+    txt += "Downloadable transcripts: " + num_downloadable_transcripts + "\n"
+    txt += "\n"
+    txt += "Number of problems: " + num_problems + "\n"
+    txt += "Number of ungated problems: " + num_problems + "\n"
 
-    # N weeks have highlights set
-    # What percentage of content is gated?
-    # What percentage of videos and transcripts are not downloadable?
+    # Types of problems
+    # problem_type_count = {
+    #     "choiceresponse": 0,
+    #     "customresponse": 0,
+    #     "optioninput": 0,
+    #     "numericalresponse": 0,
+    #     "multiplechoiceresponse": 0,
+    #     "stringresponse": 0,
+    #     "formularesponse": 0,
+    # }
+
+    # Trouble section
+
+    # we_got_trouble = {
+    #     "discussion_links": [],  # Any links to the discussion boards?
+    #     "flash_links": [],  # Any Flash?
+    #     "top_tab_js": [],  # Any javascript that targets the top tabs?
+    #     "iframes": [],  # Any iframes?
+    # }
 
     # Summarize LTI tools & keys
     # TODO: better formatting
     txt += lti_passports
 
-    # Number of ORA
-    # Do we still have Flash in this course?
-    # Do we have javascript that tries to access the top tabs?
-    # How many discussion components are there?
-    # Also, list all links to the forums and where they appear in the course.
+    # General maintenance items
+    # Number of ORA ("openassessment" tag)
+    # How many discussion components are there? ("discussion" tag)
 
     print(txt)
     summary.write(txt)
