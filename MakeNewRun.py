@@ -6,7 +6,7 @@ import math
 import shutil
 import tarfile
 import argparse
-from datetime import date
+import datetime
 import xml.etree.ElementTree as ET
 
 instructions = """
@@ -32,7 +32,7 @@ def edxDateToPython(date_string):
     # split on -, T, :, and +
     # Resulting list is year, month, day, 24hours, minutes,seconds, something something.
     date_list_str = re.split("-|T|:|\+", date_string)
-    date_list = [int(x) for x in date_list_str]
+    date_list = [int(x.replace('"', "").replace("'", "")) for x in date_list_str]
     return {
         "date": datetime.date(date_list[0], date_list[1], date_list[2]),
         "time": datetime.time(date_list[3], date_list[4], date_list[5]),
@@ -67,13 +67,12 @@ def pythonDateToEdx(pydate, pytime):
     return date_string
 
 
-# Read in the filename and options
-
 ###########################
 # ADD TO ARGUMENTS:
 # JSON file for command-line arguments, including anything we'd normally prompt for.
 ###########################
 
+# Read in the filename and options
 parser = argparse.ArgumentParser(usage=instructions, add_help=False)
 parser.add_argument("filename", default="course.tar.gz")
 parser.add_argument("run", default=None)
@@ -89,6 +88,9 @@ if args.help:
 use_new_dates = args.dates
 new_start_edx = ""
 new_end_edx = ""
+# TODO: replace placeholder
+new_start_py = datetime.date.today()
+new_end_py = datetime.date.today()
 # TODO: Allow command-line or file-driven entry of dates & times
 if use_new_dates:
     start_date = input("Start date (yyyy-mm-dd) = ")
@@ -97,7 +99,16 @@ if use_new_dates:
     end_time = input("End time (24h:min:sec) = ")
     new_start_edx = start_date + "T" + start_time + "Z"
     new_end_edx = end_date + "T" + end_time + "Z"
-    # TODO: Are any of these in the past? Flag that.
+
+    # Are any of these in the past? Flag that.
+    new_start_py = edxDateToPython(new_start_edx)["date"]
+    new_end_py = edxDateToPython(new_end_edx)["date"]
+    starts_in_past = new_start_py < datetime.date.today()
+    ends_in_past = new_end_py < datetime.date.today()
+    if starts_in_past:
+        sys.exit("WARNING: Your start date is in the past.")
+    if ends_in_past:
+        sys.exit("WARNING: Your end date is in the past.")
 
 if not os.path.exists(args.filename):
     sys.exit("Filename not found: " + args.filename)
@@ -142,24 +153,25 @@ with open(os.path.join(pathname, root_filename), "w") as root_file:
     course_name = match_object.group(1)
 
 # Rename the course/course_run.xml file
-runfile = os.path.join(pathname, "course", old_run + ".xml")
-os.rename(runfile, os.path.join(pathname, new_run + ".xml"))
+run_file = os.path.join(pathname, "course", "course", old_run + ".xml")
+new_runfile = os.path.join(pathname, "course", "course", new_run + ".xml")
+os.rename(run_file, new_runfile)
 
 # Set the start and end dates in xml attributes on course/course_run.xml
 # Get the old start date too. We'll need it to update the ORAs later.
-run_file = os.path.join(pathname, "course", new_run + ".xml")
-tree = ET.parserun_file
+run_file = os.path.join(pathname, "course", "course", new_run + ".xml")
+tree = ET.parse(run_file)
 root = tree.getroot()
 old_start_edx = root.attrib["start"]
-root.set("start", new_start)
-root.set("end", new_end)
+root.set("start", new_start_edx)
+root.set("end", new_end_edx)
 
 # Items to track for later
 course_pacing = (
     "self-paced" if root.attrib["self_paced"] == "true" else "instructor-paced"
 )
 # Convert old_start_date to a Python datetime object for later manipulation
-old_start_py = edxDateToPython(old_start_edx)
+old_start_py = edxDateToPython(old_start_edx)["date"]
 date_delta = new_start_py - old_start_py
 
 # Write that file, done with it.
@@ -171,13 +183,17 @@ tree.write(run_file, encoding="UTF-8", xml_declaration=False)
 ##########################
 
 # Rename the policies/course_run folder
-runfolder = os.path.join(pathname, "policies", old_run)
-os.rename(runfolder, os.path.join(pathname, "policies", new_run))
+runfolder = os.path.join(pathname, "course", "policies", old_run)
+newfolder = os.path.join(pathname, "course", "policies", new_run)
+if os.path.exists(newfolder):
+    shutil.rmtree(newfolder)
+os.rename(runfolder, newfolder)
+
 
 # TODO: Existence checks for a lot of these.
 # Open policies/course_run/policy.json
 data = dict()
-with open(os.path.join(pathname, "policies", new_run, "policy.json")) as f:
+with open(os.path.join(pathname, "course", "policies", new_run, "policy.json")) as f:
     data = json.load(f)
 
     # Set the root to "course/new_run"
@@ -186,19 +202,23 @@ with open(os.path.join(pathname, "policies", new_run, "policy.json")) as f:
     # Clear any discussion blackouts.
     data["course/" + new_run]["discussion_blackouts"] = []
     # Set the start and end dates
-    data["course/" + new_run]["start"] = new_start
-    data["course/" + new_run]["end"] = new_end
+    data["course/" + new_run]["start"] = new_start_edx
+    data["course/" + new_run]["end"] = new_end_edx
     # Set the xml_attributes:filename using new_run
-    data["xml_attributes"]["filename"] = ["course/" + new_run]
+    data["course/" + new_run]["xml_attributes"]["filename"] = ["course/" + new_run]
     # A few other default settings
-    data["days_early_for_beta"] = 100.0
+    data["course/" + new_run]["days_early_for_beta"] = 100.0
 
     # TODO: Wipe all the old LTI keys and secrets.
 
     # Items to handle later
-    lti_passports = data["lti_passports"]
-    faq_filename = [x["url_slug"] for x in tabs if "FAQ" in x["name"]][0]
-    display_name = data["display_name"]
+    lti_passports = data["course/" + new_run].get("lti_passports", [])
+
+    tabs = [x for x in data["course/" + new_run]["tabs"]]
+    faq_search = [x for x in tabs if "FAQ" in x["name"]]
+    if len(faq_search) > 0:
+        faq_filename = faq_slug[0]["url_slug"]
+    display_name = data["course/" + new_run]["display_name"]
 
 
 ################################
@@ -220,7 +240,9 @@ with open(os.path.join(pathname, "policies", new_run, "policy.json")) as f:
 # Open everything in the chapter/ folder
 num_highlights = 0
 num_chapters = 0
-for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "chapter")):
+for dirpath, dirnames, filenames in os.walk(
+    os.path.join(pathname, "course", "chapter")
+):
     for eachfile in filenames:
 
         # Get the XML for each file
@@ -229,7 +251,7 @@ for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "chapter")):
 
         # If there's a highlights attribute set, then there are highlights.
         # If not, then no.
-        if root.attrib[highlights]:
+        if root.attrib.get("highlights", False):
             num_highlights += 1
 
         num_chapters += 1
@@ -243,7 +265,9 @@ for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "chapter")):
 # Especially need: ORA, LTI, discussion
 component_count = {}
 # Open everything in the vertical/ folder
-for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "vertical")):
+for dirpath, dirnames, filenames in os.walk(
+    os.path.join(pathname, "course", "vertical")
+):
     for eachfile in filenames:
 
         # Get the XML for each file
@@ -263,6 +287,8 @@ for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "vertical")):
         # These are all inline in the verticals (hopefully)
         for child in root:
             if child.tag == "openassessment":
+                # If there are no child elements (sigh), dig into the url_name.
+
                 # TODO: Update ORAs to use flexible grading.
 
                 # Shift deadlines for ORAs to match new start date.
@@ -294,7 +320,7 @@ num_videos = 0
 num_downloadable_videos = 0
 num_downloadable_transcripts = 0
 # Open everything in the video/ folder
-for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "video")):
+for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "course", "video")):
     for eachfile in filenames:
 
         # Get the XML for each file
@@ -354,12 +380,23 @@ problem_type_translator = {
     "formularesponse": "math formula",
 }
 
+# For all of these, if so, where?
+we_got_trouble = {
+    "discussion_links": [],  # Any links to the discussion boards?
+    "flash_links": [],  # Any Flash?
+    "top_tab_js": [],  # Any javascript that targets the top tabs?
+    "iframes": [],  # Any iframes?
+}
+
+
 # Open everything in the problem/ folder
-for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "problem")):
+for dirpath, dirnames, filenames in os.walk(
+    os.path.join(pathname, "course", "problem")
+):
     for eachfile in filenames:
 
         # Get the XML for each file
-        tree = ET.parse(os.path.join(dirpath, eachfile))
+        tree = ET.parse(os.path.join(dirpath, "course", "problem", eachfile))
         root = tree.getroot()
 
         if root.attrib["group_access"]:
@@ -370,6 +407,8 @@ for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "problem")):
         # They won't be at a reliable depth in the problem XML,
         # So we need to dump the full problem file text to get them.
         problem_text = ET.tostring(tree.getroot(), encoding="utf-8", method="text")
+        if "/discusison/forum" in problem_text:
+            we_got_trouble["discussion_links"].append("problem/" + eachfile)
         for t in problem_types:
             if t in problem_text:
                 problem_type_count[t] = problem_type_count[t] + 1
@@ -380,16 +419,8 @@ for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "problem")):
 # HTML scraping
 ################################
 
-# For all of these, if so, where?
-we_got_trouble = {
-    "discussion_links": [],  # Any links to the discussion boards?
-    "flash_links": [],  # Any Flash?
-    "top_tab_js": [],  # Any javascript that targets the top tabs?
-    "iframes": [],  # Any iframes?
-}
-
 # Open everything in the html/ folder
-for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "html")):
+for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "course", "html")):
     html_files = [x for x in filenames if x[-5:] == ".html"]
     for eachfile in html_files:
 
@@ -402,7 +433,7 @@ for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "html")):
             if ".swf" in txt:
                 we_got_trouble["flash_links"].append(eachfile)
             if "/discusison/forum" in txt:
-                we_got_trouble["discussion_links"].append(eachfile)
+                we_got_trouble["discussion_links"].append("html/" + eachfile)
             if (
                 "$('.navbar')" in txt
                 or "$('.course-tabs')" in txt
@@ -427,8 +458,12 @@ with open(os.path.join(pathname, course_name + "_" + new_run + ".txt"), a) as su
     txt += "--------------\n"
     txt += "\n"
     txt += "Identifier: " + display_name + " " + new_run + "\n"
-    txt += "New Start: " + new_start + "\n"
-    txt += "New End: " + new_end + "\n"
+    txt += "New Start: " + new_start_edx + "\n"
+    if starts_in_past:
+        print("WARNING: course starts in the past")
+    txt += "New End: " + new_end_edx + "\n"
+    if ends_in_past:
+        print("WARNING: course ends in the past")
     txt += "Pacing: " + course_pacing + "\n"
     txt += "\n"
     txt += "Number of sections: " + num_chapters + "\n"
@@ -442,28 +477,29 @@ with open(os.path.join(pathname, course_name + "_" + new_run + ".txt"), a) as su
     txt += "Number of ungated problems: " + num_problems + "\n"
 
     # Types of problems
-    # problem_type_count = {
-    #     "choiceresponse": 0,
-    #     "customresponse": 0,
-    #     "optioninput": 0,
-    #     "numericalresponse": 0,
-    #     "multiplechoiceresponse": 0,
-    #     "stringresponse": 0,
-    #     "formularesponse": 0,
-    # }
+    for t in problem_type_translator:
+        txt += problem_type_count[t] + " " + problem_type_translator[t] + " problems\n"
 
     # Trouble section
+    txt += "\n"
+    for troub in we_got_trouble:
+        if len(we_got_trouble[troub]) > 0:
+            if troub == "discussion_links":
+                txt += "Direct links to discussion boards:\n"
+            elif troub == "flash_links":
+                txt += "Links to Flash files (.swf):\n"
+            elif troub == "top_tab_js":
+                txt += "Javascript trying to access the top tab bar:\n"
+            elif troub == "iframes":
+                txt += "Pages with iframes:\n"
 
-    # we_got_trouble = {
-    #     "discussion_links": [],  # Any links to the discussion boards?
-    #     "flash_links": [],  # Any Flash?
-    #     "top_tab_js": [],  # Any javascript that targets the top tabs?
-    #     "iframes": [],  # Any iframes?
-    # }
+            for l in we_got_trouble[troub]:
+                txt += l + "\n"
 
     # Summarize LTI tools & keys
-    # TODO: better formatting
-    txt += lti_passports
+    txt += "LTI tools:\n"
+    for l in lti_passports:
+        txt += lti_passports[0] + "\n"
 
     # General maintenance items
     # Number of ORA ("openassessment" tag)
