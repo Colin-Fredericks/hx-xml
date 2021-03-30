@@ -88,9 +88,13 @@ if args.help:
 use_new_dates = args.dates
 new_start_edx = ""
 new_end_edx = ""
-# TODO: replace placeholder
+
+# TODO: replace the placeholder values below
 new_start_py = datetime.date.today()
 new_end_py = datetime.date.today()
+starts_in_past = False
+ends_in_past = False
+
 # TODO: Allow command-line or file-driven entry of dates & times
 if use_new_dates:
     start_date = input("Start date (yyyy-mm-dd) = ")
@@ -276,7 +280,7 @@ for dirpath, dirnames, filenames in os.walk(
 
         # get children and count how many we have
         for child in root:
-            if component_count[child.tag]:
+            if component_count.get(child.tag, False):
                 component_count[child.tag] = component_count[child.tag] + 1
             else:
                 component_count[child.tag] = 1
@@ -327,13 +331,13 @@ for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "course", "vi
         tree = ET.parse(os.path.join(dirpath, eachfile))
         root = tree.getroot()
 
-        if root.attrib["youtube_id_1_0"]:
+        if root.attrib.get("youtube_id_1_0", False):
             if root.attrib["youtube_id_1_0"] != "":
                 youtube_videos += 1
-        if root.attrib["download_video"]:
+        if root.attrib.get("download_video", False):
             if root.attrib["download_video"] == "true":
                 num_downloadable_videos += 1
-        if root.attrib["download_track"]:
+        if root.attrib.get("download_track", False):
             if root.attrib["download_track"] == "true":
                 num_downloadable_transcripts += 1
 
@@ -396,17 +400,17 @@ for dirpath, dirnames, filenames in os.walk(
     for eachfile in filenames:
 
         # Get the XML for each file
-        tree = ET.parse(os.path.join(dirpath, "course", "problem", eachfile))
+        tree = ET.parse(os.path.join(dirpath, eachfile))
         root = tree.getroot()
 
-        if root.attrib["group_access"]:
+        if root.attrib.get("group_access", False):
             if root.attrib["group_access"] == "{&quot;51&quot;: [1, 2]}":
                 num_ungated_problems += 1
 
         # Check for specific problem types and count them.
         # They won't be at a reliable depth in the problem XML,
         # So we need to dump the full problem file text to get them.
-        problem_text = ET.tostring(tree.getroot(), encoding="utf-8", method="text")
+        problem_text = str(ET.tostring(tree.getroot(), encoding="utf-8", method="text"))
         if "/discusison/forum" in problem_text:
             we_got_trouble["discussion_links"].append("problem/" + eachfile)
         for t in problem_types:
@@ -424,12 +428,12 @@ for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "course", "ht
     html_files = [x for x in filenames if x[-5:] == ".html"]
     for eachfile in html_files:
 
-        with open(eachfile, mode="r") as h:
+        with open(os.path.join(pathname, "course", "html", eachfile), mode="r") as h:
             # Get the whole-file text so we can search it:
-            txt = file.read(h)
+            txt = h.read()
 
             if "<iframe" in txt:
-                we_got_trouble["iframe"].append(eachfile)
+                we_got_trouble["iframes"].append(eachfile)
             if ".swf" in txt:
                 we_got_trouble["flash_links"].append(eachfile)
             if "/discusison/forum" in txt:
@@ -452,7 +456,7 @@ for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "course", "ht
 ################################
 
 # Create high-level summary of course as takeaway file.
-with open(os.path.join(pathname, course_name + "_" + new_run + ".txt"), a) as summary:
+with open(os.path.join(pathname, course_name + "_" + new_run + ".txt"), "a") as summary:
     txt = ""
     txt += "Course Summary\n"
     txt += "--------------\n"
@@ -466,19 +470,24 @@ with open(os.path.join(pathname, course_name + "_" + new_run + ".txt"), a) as su
         print("WARNING: course ends in the past")
     txt += "Pacing: " + course_pacing + "\n"
     txt += "\n"
-    txt += "Number of sections: " + num_chapters + "\n"
-    txt += "Highlights set for " + num_highlights + " sections" + "\n"
+    txt += "Number of sections: " + str(num_chapters) + "\n"
+    txt += "Highlights set for " + str(num_highlights) + " sections" + "\n"
     txt += "\n"
-    txt += "Number of videos: " + num_chapters + "\n"
-    txt += "Downloadable videos: " + num_downloadable_videos + "\n"
-    txt += "Downloadable transcripts: " + num_downloadable_transcripts + "\n"
+    txt += "Number of videos: " + str(num_chapters) + "\n"
+    txt += "Downloadable videos: " + str(num_downloadable_videos) + "\n"
+    txt += "Downloadable transcripts: " + str(num_downloadable_transcripts) + "\n"
     txt += "\n"
-    txt += "Number of problems: " + num_problems + "\n"
-    txt += "Number of ungated problems: " + num_problems + "\n"
+    txt += "Number of problems: " + str(num_problems) + "\n"
+    txt += "Number of ungated problems: " + str(num_problems) + "\n"
 
     # Types of problems
     for t in problem_type_translator:
-        txt += problem_type_count[t] + " " + problem_type_translator[t] + " problems\n"
+        txt += (
+            str(problem_type_count[t])
+            + " "
+            + problem_type_translator[t]
+            + " problems\n"
+        )
 
     # Trouble section
     txt += "\n"
@@ -494,12 +503,16 @@ with open(os.path.join(pathname, course_name + "_" + new_run + ".txt"), a) as su
                 txt += "Pages with iframes:\n"
 
             for l in we_got_trouble[troub]:
-                txt += l + "\n"
+                txt += str(l) + "\n"
 
     # Summarize LTI tools & keys
-    txt += "LTI tools:\n"
-    for l in lti_passports:
-        txt += lti_passports[0] + "\n"
+    txt += "\n"
+    if len(lti_passports) > 0:
+        txt += "LTI tools:\n"
+        for l in lti_passports:
+            txt += lti_passports[0] + "\n"
+    else:
+        txt += "No LTI tools.\n"
 
     # General maintenance items
     # Number of ORA ("openassessment" tag)
