@@ -53,7 +53,7 @@ def pythonDateToEdx(pydate, pytime):
     date_list_str = [str(x) for x in date_list]
     date_list_full = []
     for d in date_list_str:
-        date_list_full.append(d if len(d) > 0 else "0" + d)
+        date_list_full.append(d if len(d) > 1 else "0" + d)
 
     date_string = ""
     date_string += date_list_full[0] + "-"
@@ -62,7 +62,7 @@ def pythonDateToEdx(pydate, pytime):
     date_string += date_list_full[3] + ":"
     date_string += date_list_full[4] + ":"
     date_string += date_list_full[5] + "+"
-    date_string += "+00:00"
+    date_string += "00:00"
 
     return date_string
 
@@ -86,14 +86,14 @@ if args.help:
 
 # Prompt for start and end dates.
 use_new_dates = args.dates
-new_start_edx = ""
-new_end_edx = ""
 
 # TODO: replace the placeholder values below
 new_start_py = datetime.date.today()
 new_end_py = datetime.date.today()
 starts_in_past = False
 ends_in_past = False
+new_start_edx = pythonDateToEdx(new_start_py, datetime.datetime.now().time())
+new_end_edx = pythonDateToEdx(new_end_py, datetime.datetime.now().time())
 
 # TODO: Allow command-line or file-driven entry of dates & times
 if use_new_dates:
@@ -410,12 +410,15 @@ for dirpath, dirnames, filenames in os.walk(
         # Check for specific problem types and count them.
         # They won't be at a reliable depth in the problem XML,
         # So we need to dump the full problem file text to get them.
-        problem_text = str(ET.tostring(tree.getroot(), encoding="utf-8", method="text"))
-        if "/discusison/forum" in problem_text:
-            we_got_trouble["discussion_links"].append("problem/" + eachfile)
-        for t in problem_types:
-            if t in problem_text:
-                problem_type_count[t] = problem_type_count[t] + 1
+        with open(os.path.join(pathname, "course", "problem", eachfile), mode="r") as p:
+            # Get the whole-file text so we can search it:
+            problem_text = p.read()
+
+            if "/discusison/forum" in problem_text:
+                we_got_trouble["discussion_links"].append("problem/" + eachfile)
+            for t in problem_types:
+                if t in problem_text:
+                    problem_type_count[t] = problem_type_count[t] + 1
 
         num_problems += 1
 
@@ -448,7 +451,8 @@ for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "course", "ht
             ):
                 we_got_trouble["top_tab_js"].append(eachfile)
 
-# Re-tar
+
+# TODO: Re-tar
 
 
 ################################
@@ -456,6 +460,9 @@ for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "course", "ht
 ################################
 
 # Create high-level summary of course as takeaway file.
+summary_file = os.path.join(pathname, course_name + "_" + new_run + ".txt")
+if os.path.exists(summary_file):
+    os.remove(summary_file)
 with open(os.path.join(pathname, course_name + "_" + new_run + ".txt"), "a") as summary:
     txt = ""
     txt += "Course Summary\n"
@@ -473,7 +480,7 @@ with open(os.path.join(pathname, course_name + "_" + new_run + ".txt"), "a") as 
     txt += "Number of sections: " + str(num_chapters) + "\n"
     txt += "Highlights set for " + str(num_highlights) + " sections" + "\n"
     txt += "\n"
-    txt += "Number of videos: " + str(num_chapters) + "\n"
+    txt += "Number of videos: " + str(num_videos) + "\n"
     txt += "Downloadable videos: " + str(num_downloadable_videos) + "\n"
     txt += "Downloadable transcripts: " + str(num_downloadable_transcripts) + "\n"
     txt += "\n"
