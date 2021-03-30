@@ -23,8 +23,49 @@ Options:
   -d  Prompt for new dates for start/end of course.
   -h  Print this help message and exit.
 
-Last update: Jan 30th 2021
+Last update: March 30th 2021
 """
+
+
+def edxDateToPython(date_string):
+    # date_string is in edx's format: 2030-01-01T00:00:00+00:00
+    # split on -, T, :, and +
+    # Resulting list is year, month, day, 24hours, minutes,seconds, something something.
+    date_list_str = re.split("-|T|:|\+", date_string)
+    date_list = [int(x) for x in date_list_str]
+    return {
+        "date": datetime.date(date_list[0], date_list[1], date_list[2]),
+        "time": datetime.time(date_list[3], date_list[4], date_list[5]),
+    }
+
+
+def pythonDateToEdx(pydate, pytime):
+    # return will be is in edx's format: 2030-01-01T00:00:00+00:00
+    date_list = [
+        pydate.year,
+        pydate.month,
+        pydate.day,
+        pytime.hour,
+        pytime.minute,
+        pytime.second,
+    ]
+
+    date_list_str = [str(x) for x in date_list]
+    date_list_full = []
+    for d in date_list_str:
+        date_list_full.append(d if len(d) > 0 else "0" + d)
+
+    date_string = ""
+    date_string += date_list_full[0] + "-"
+    date_string += date_list_full[1] + "-"
+    date_string += date_list_full[2] + "T"
+    date_string += date_list_full[3] + ":"
+    date_string += date_list_full[4] + ":"
+    date_string += date_list_full[5] + "+"
+    date_string += "+00:00"
+
+    return date_string
+
 
 # Read in the filename and options
 
@@ -46,16 +87,16 @@ if args.help:
 
 # Prompt for start and end dates.
 use_new_dates = args.dates
-new_start = ""
-new_end = ""
+new_start_edx = ""
+new_end_edx = ""
 # TODO: Allow command-line or file-driven entry of dates & times
 if use_new_dates:
     start_date = input("Start date (yyyy-mm-dd) = ")
     start_time = input("Start time (24h:min:sec) = ")
     end_date = input("End date (yyyy-mm-dd) = ")
     end_time = input("End time (24h:min:sec) = ")
-    new_start = start_date + "T" + start_time + "Z"
-    new_end = end_date + "T" + end_time + "Z"
+    new_start_edx = start_date + "T" + start_time + "Z"
+    new_end_edx = end_date + "T" + end_time + "Z"
     # TODO: Are any of these in the past? Flag that.
 
 if not os.path.exists(args.filename):
@@ -105,16 +146,21 @@ runfile = os.path.join(pathname, "course", old_run + ".xml")
 os.rename(runfile, os.path.join(pathname, new_run + ".xml"))
 
 # Set the start and end dates in xml attributes on course/course_run.xml
+# Get the old start date too. We'll need it to update the ORAs later.
 run_file = os.path.join(pathname, "course", new_run + ".xml")
 tree = ET.parserun_file
 root = tree.getroot()
+old_start_edx = root.attrib["start"]
 root.set("start", new_start)
 root.set("end", new_end)
 
-# Items to track for later:
+# Items to track for later
 course_pacing = (
     "self-paced" if root.attrib["self_paced"] == "true" else "instructor-paced"
 )
+# Convert old_start_date to a Python datetime object for later manipulation
+old_start_py = edxDateToPython(old_start_edx)
+date_delta = new_start_py - old_start_py
 
 # Write that file, done with it.
 tree.write(run_file, encoding="UTF-8", xml_declaration=False)
@@ -146,6 +192,8 @@ with open(os.path.join(pathname, "policies", new_run, "policy.json")) as f:
     data["xml_attributes"]["filename"] = ["course/" + new_run]
     # A few other default settings
     data["days_early_for_beta"] = 100.0
+
+    # TODO: Wipe all the old LTI keys and secrets.
 
     # Items to handle later
     lti_passports = data["lti_passports"]
@@ -212,10 +260,25 @@ for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "vertical")):
         ################################
         # Open Response Assessments
         ################################
-
         # These are all inline in the verticals (hopefully)
-        # Update ORAs to use flexible grading.
-        # Shift deadlines for ORAs to match new start date.
+        for child in root:
+            if child.tag == "openassessment":
+                # TODO: Update ORAs to use flexible grading.
+
+                # Shift deadlines for ORAs to match new start date.
+                # Sample XML:
+                # <openassessment
+                #     url_name="0dbe16d48442412d9df17b43daf32bb8"
+                #     submission_start="2001-01-01T00:00:00+00:00"
+                #     submission_due="2021-07-13T23:30:00+00:00"
+                # >
+                #   <assessments>
+                #     <assessment name="peer-assessment" must_grade="5" must_be_graded_by="3"
+                #       start="2001-01-01T00:00:00+00:00" due="2021-07-21T23:25:00+00:00"
+                #     />
+                #   </assessments>
+                # </openassessment>
+                pass
 
 
 ################################
