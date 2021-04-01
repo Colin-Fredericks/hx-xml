@@ -7,7 +7,9 @@ import shutil
 import tarfile
 import argparse
 import datetime
-import xml.etree.ElementTree as ET
+from statistics import median
+from collections import OrderedDict
+from xml.etree import ElementTree as ET
 
 instructions = """
 To use:
@@ -25,6 +27,11 @@ Options:
 
 Last update: March 30th 2021
 """
+
+
+######################
+# Utility Functions
+######################
 
 
 def edxDateToPython(date_string):
@@ -67,10 +74,47 @@ def pythonDateToEdx(pydate, pytime):
     return date_string
 
 
-###########################
-# ADD TO ARGUMENTS:
-# JSON file for command-line arguments, including anything we'd normally prompt for.
-###########################
+# Converts from seconds to hh:mm:ss,msec format
+# Used to convert video duration
+def secondsToHMS(time):
+    # Round it to an integer.
+    time = int(round(float(time), 0))
+
+    # Downconvert through hours.
+    seconds = int(time % 60)
+    time -= seconds
+    minutes = int((time / 60) % 60)
+    time -= minutes * 60
+    hours = int((time / 3600) % 24)
+
+    # Make sure we get enough zeroes.
+    if int(seconds) == 0:
+        seconds = "00"
+    elif int(seconds) < 10:
+        seconds = "0" + str(seconds)
+    if int(minutes) == 0:
+        minutes = "00"
+    elif int(minutes) < 10:
+        minutes = "0" + str(minutes)
+    if int(hours) == 0:
+        hours = "00"
+    elif int(hours) < 10:
+        hours = "0" + str(hours)
+
+    # Send back a string
+    return str(hours) + ":" + str(minutes) + ":" + str(seconds)
+
+
+# Space out text to a particular number of characters wide
+def spaceOut(s, n, rl="left"):
+    while len(s) < n:
+        s = s + " " if rl == "left" else " " + s
+    return s
+
+
+#######################
+# Main starts here
+#######################
 
 # Read in the filename and options
 parser = argparse.ArgumentParser(usage=instructions, add_help=False)
@@ -78,6 +122,12 @@ parser.add_argument("filename", default="course.tar.gz")
 parser.add_argument("run", default=None)
 parser.add_argument("-h", "--help", action="store_true")
 parser.add_argument("-d", "--dates", action="store_true")
+
+
+###########################
+# TODO: Handle input from JSON file
+###########################
+# parser.add_argument("file", action="store")
 
 
 args = parser.parse_args()
@@ -90,8 +140,6 @@ use_new_dates = args.dates
 # TODO: replace the placeholder values below
 new_start_py = datetime.date.today()
 new_end_py = datetime.date.today()
-starts_in_past = False
-ends_in_past = False
 new_start_edx = pythonDateToEdx(new_start_py, datetime.datetime.now().time())
 new_end_edx = pythonDateToEdx(new_end_py, datetime.datetime.now().time())
 
@@ -107,12 +155,13 @@ if use_new_dates:
     # Are any of these in the past? Flag that.
     new_start_py = edxDateToPython(new_start_edx)["date"]
     new_end_py = edxDateToPython(new_end_edx)["date"]
-    starts_in_past = new_start_py < datetime.date.today()
-    ends_in_past = new_end_py < datetime.date.today()
-    if starts_in_past:
-        sys.exit("WARNING: Your start date is in the past.")
-    if ends_in_past:
-        sys.exit("WARNING: Your end date is in the past.")
+
+starts_in_past = new_start_py < datetime.date.today()
+ends_in_past = new_end_py < datetime.date.today()
+if starts_in_past:
+    sys.exit("WARNING: Your start date is in the past.")
+if ends_in_past:
+    sys.exit("WARNING: Your end date is in the past.")
 
 if not os.path.exists(args.filename):
     sys.exit("Filename not found: " + args.filename)
@@ -146,9 +195,13 @@ with open(os.path.join(pathname, root_filename), "r") as root_file:
     root_text = root_file.read()
 
 # Open to write
+# TODO: switch to xml read/write , and get course ID
 with open(os.path.join(pathname, root_filename), "w") as root_file:
-    match_object = re.search('url_name="(.+?)"', root_text)
-    old_run = match_object.group(1)
+    course_match = re.search('course="(.+?)"', root_text)
+    course_id = course_match.group(1)
+
+    url_match = re.search('url_name="(.+?)"', root_text)
+    old_run = url_match.group(1)
     new_root_text = root_text.replace(old_run, new_run)
     root_file.write(new_root_text)
 
@@ -195,6 +248,7 @@ os.rename(runfolder, newfolder)
 
 
 # TODO: Existence checks for a lot of these.
+# TODO: Blackout dates
 # Open policies/course_run/policy.json
 data = dict()
 with open(os.path.join(pathname, "course", "policies", new_run, "policy.json")) as f:
@@ -265,6 +319,8 @@ for dirpath, dirnames, filenames in os.walk(
 # Vertical scraping
 ################################
 
+# TODO: Add LTI components
+
 # Count the number of all the component types in the course.
 # Especially need: ORA, LTI, discussion
 component_count = {}
@@ -284,6 +340,10 @@ for dirpath, dirnames, filenames in os.walk(
                 component_count[child.tag] = component_count[child.tag] + 1
             else:
                 component_count[child.tag] = 1
+
+        ################################
+        # LTI components - don't forget old tag style
+        ################################
 
         ################################
         # Open Response Assessments
@@ -310,6 +370,8 @@ for dirpath, dirnames, filenames in os.walk(
                 # </openassessment>
                 pass
 
+# Alphabetizing
+component_count_sorted = OrderedDict(sorted(component_count.items()))
 
 ################################
 # Video scraping
@@ -323,6 +385,7 @@ youtube_videos = 0
 num_videos = 0
 num_downloadable_videos = 0
 num_downloadable_transcripts = 0
+video_lengths = []
 # Open everything in the video/ folder
 for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "course", "video")):
     for eachfile in filenames:
@@ -340,12 +403,31 @@ for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "course", "vi
         if root.attrib.get("download_track", False):
             if root.attrib["download_track"] == "true":
                 num_downloadable_transcripts += 1
+        if root.attrib["youtube_id_1_0"] != "":
+            youtube_videos += 1
+
+        # Getting video durations
+        asset_tag = root.find("video_asset")
+        if asset_tag is not None:
+            if asset_tag.attrib.get("duration", False):
+                video_lengths.append(float(asset_tag.attrib["duration"]))
 
         num_videos += 1
 
 percent_downloadable_vid = num_downloadable_videos / num_videos
 percent_downloadable_trans = num_downloadable_transcripts / num_videos
 
+video_max_length = ""
+video_median_length = ""
+video_min_length = ""
+video_total_length = ""
+if len(video_lengths) > 0:
+    video_max_length = secondsToHMS(max(video_lengths))
+    video_median_length = secondsToHMS(median(video_lengths))
+    video_min_length = secondsToHMS(min(video_lengths))
+    video_total_length = secondsToHMS(sum(video_lengths))
+else:
+    video_total_length = "Unknown. Course uses old-style video tags."
 
 ################################
 # Problem scraping
@@ -392,7 +474,6 @@ we_got_trouble = {
     "iframes": [],  # Any iframes?
 }
 
-
 # Open everything in the problem/ folder
 for dirpath, dirnames, filenames in os.walk(
     os.path.join(pathname, "course", "problem")
@@ -423,33 +504,51 @@ for dirpath, dirnames, filenames in os.walk(
         num_problems += 1
 
 ################################
-# HTML scraping
+# HTML and Tab Scraping
 ################################
 
-# Open everything in the html/ folder
-for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "course", "html")):
-    html_files = [x for x in filenames if x[-5:] == ".html"]
-    for eachfile in html_files:
 
-        with open(os.path.join(pathname, "course", "html", eachfile), mode="r") as h:
-            # Get the whole-file text so we can search it:
-            txt = h.read()
+def scrapePage(file_contents, filename, folder):
+    # Get the whole-file text so we can search it:
+    txt = file_contents.read()
 
-            if "<iframe" in txt:
-                we_got_trouble["iframes"].append(eachfile)
-            if ".swf" in txt:
-                we_got_trouble["flash_links"].append(eachfile)
-            if "/discusison/forum" in txt:
-                we_got_trouble["discussion_links"].append("html/" + eachfile)
-            if (
-                "$('.navbar')" in txt
-                or "$('.course-tabs')" in txt
-                or "$('.navbar-nav')" in txt
-                or '$(".navbar")' in txt  # double OR single quotes
-                or '$(".course-tabs")' in txt
-                or '$(".navbar-nav")' in txt
-            ):
-                we_got_trouble["top_tab_js"].append(eachfile)
+    if "<iframe" in txt:
+        we_got_trouble["iframes"].append(folder + "/" + filename)
+    if ".swf" in txt:
+        we_got_trouble["flash_links"].append(folder + "/" + filename)
+    if "/discusison/forum" in txt:
+        we_got_trouble["discussion_links"].append(folder + "/" + filename)
+    if (
+        "$('.navbar')" in txt
+        or "$('.course-tabs')" in txt
+        or "$('.navbar-nav')" in txt
+        or '$(".navbar")' in txt  # double OR single quotes
+        or '$(".course-tabs")' in txt
+        or '$(".navbar-nav")' in txt
+    ):
+        we_got_trouble["top_tab_js"].append(folder + "/" + filename)
+
+
+def scrapeFolder(folder):
+    if folder == "html" or folder == "tabs":
+        extension = ".html"
+    else:
+        extension = ".xml"
+    for dirpath, dirnames, filenames in os.walk(
+        os.path.join(pathname, "course", folder)
+    ):
+        html_files = [x for x in filenames if x[-(len(extension)) :] == extension]
+        for eachfile in html_files:
+
+            with open(
+                os.path.join(pathname, "course", folder, eachfile), mode="r"
+            ) as file_contents:
+                scrapePage(file_contents, eachfile, folder)
+
+
+scrapeFolder("html")
+scrapeFolder("tabs")
+scrapeFolder("problem")
 
 
 # TODO: Re-tar
@@ -468,7 +567,8 @@ with open(os.path.join(pathname, course_name + "_" + new_run + ".txt"), "a") as 
     txt += "Course Summary\n"
     txt += "--------------\n"
     txt += "\n"
-    txt += "Identifier: " + display_name + " " + new_run + "\n"
+    txt += "Course name: " + display_name + "\n"
+    txt += "Identifier: " + course_id + " " + new_run + "\n"
     txt += "New Start: " + new_start_edx + "\n"
     if starts_in_past:
         print("WARNING: course starts in the past")
@@ -480,9 +580,33 @@ with open(os.path.join(pathname, course_name + "_" + new_run + ".txt"), "a") as 
     txt += "Number of sections: " + str(num_chapters) + "\n"
     txt += "Highlights set for " + str(num_highlights) + " sections" + "\n"
     txt += "\n"
-    txt += "Number of videos: " + str(num_videos) + "\n"
-    txt += "Downloadable videos: " + str(num_downloadable_videos) + "\n"
-    txt += "Downloadable transcripts: " + str(num_downloadable_transcripts) + "\n"
+    txt += "Video statistics:\n"
+    txt += "  Number of videos: " + str(num_videos) + "\n"
+    txt += "  Downloadable videos: " + str(num_downloadable_videos) + "\n"
+    txt += "  Downloadable transcripts: " + str(num_downloadable_transcripts) + "\n"
+    txt += "  Total duration: " + video_total_length + "\n"
+    txt += (
+        "  Max: "
+        + video_max_length
+        + "  Median: "
+        + video_median_length
+        + "  Min: "
+        + video_min_length
+        + "\n"
+    )
+    txt += "\n"
+    txt += "Component Count:\n"
+
+    # Types of problems
+    for c in component_count_sorted:
+        txt += (
+            "  "
+            + spaceOut(str(component_count_sorted[c]), 4, "right")
+            + " "
+            + c
+            + " components\n"
+        )
+
     txt += "\n"
     txt += "Number of problems: " + str(num_problems) + "\n"
     txt += "Number of ungated problems: " + str(num_problems) + "\n"
@@ -490,7 +614,8 @@ with open(os.path.join(pathname, course_name + "_" + new_run + ".txt"), "a") as 
     # Types of problems
     for t in problem_type_translator:
         txt += (
-            str(problem_type_count[t])
+            "  "
+            + spaceOut(str(problem_type_count[t]), 4, "right")
             + " "
             + problem_type_translator[t]
             + " problems\n"
@@ -507,7 +632,7 @@ with open(os.path.join(pathname, course_name + "_" + new_run + ".txt"), "a") as 
             elif troub == "top_tab_js":
                 txt += "Javascript trying to access the top tab bar:\n"
             elif troub == "iframes":
-                txt += "Pages with iframes:\n"
+                txt += "Components with iframes:\n"
 
             for l in we_got_trouble[troub]:
                 txt += str(l) + "\n"
@@ -531,3 +656,14 @@ with open(os.path.join(pathname, course_name + "_" + new_run + ".txt"), "a") as 
 # Anything else?
 
 # Post or e-mail this somewhere so we keep a record.
+
+#########################
+# Restructure to suck less
+#########################
+"""
+def main():
+    pass
+
+if __name__ == "__main__":
+    main()
+"""
