@@ -141,6 +141,9 @@ def setUpDetails(args):
             "new_end_py": datetime.date.today(),
             "new_start_edx": "",
             "new_end_edx": "",
+            "old_start_edx": "",
+            "old_end_edx": "",
+            "date_delta": "",
         },
     }
     return details
@@ -148,16 +151,17 @@ def setUpDetails(args):
 
 # Updating the we_got_trouble or run data appropriately
 def updateDetails(new_info, details):
+    print(new_info)
     # "level 1" here is the new_info string.
     for level2 in details[new_info]:
         if new_info == level2:
             if type(details[new_info][level2]) == list:
                 for item in new_info[level2]:
                     details[new_info][level2].append(item)
-            if type(details[new_info][level2]) == string:
-                details[new_info][level2] = new_info[level2]
-            if type(details[new_info][level2]) == int:
+            elif type(details[new_info][level2]) == int:
                 details[new_info][level2] += new_info[level2]
+            else:
+                details[new_info][level2] = new_info[level2]
     return details
 
 
@@ -262,10 +266,10 @@ def updateRelated(filename):
 def handleBaseFiles(details):
     run = details["run"]
     pathname = run["pathname"]
-    dates = details["dates"]
+    date = details["dates"]
 
     # Open the course root file
-    root_file = os.path.join(pathname, "course", "course", run["new"] + ".xml")
+    root_file = os.path.join(pathname, "course", "course.xml")
     root_tree = ET.parse(root_file)
     root_root = root_tree.getroot()
 
@@ -286,23 +290,25 @@ def handleBaseFiles(details):
     # Open the course/course_run.xml file.
     tree = ET.parse(new_runfile)
     root = tree.getroot()
+    # Get the old start date. We'll need it to update the ORAs later.
+    date["old_start_edx"] = root.attrib["start"]
     # Set the start and end dates in xml attributes
-    root.set("start", dates["new_start_edx"])
-    root.set("end", dates["new_end_edx"])
-    # Get the old start date too. We'll need it to update the ORAs later.
-    run["old_start_edx"] = root.attrib["start"]
+    root.set("start", date["new_start_edx"])
+    root.set("end", date["new_end_edx"])
 
     if root.attrib["self_paced"] == "true":
         run["pacing"] = "self-paced"
 
-    # Convert old_start_date to a Python datetime object for later manipulation
-    old_start_py = edxDateToPython(old_start_edx)["date"]
-    date_delta = new_start_py - old_start_py
-
     # Write that file, done with it.
     tree.write(run_file, encoding="UTF-8", xml_declaration=False)
 
-    return run
+    # Convert old_start_date to a Python datetime object for later manipulation
+    date["old_start_py"] = edxDateToPython(date["old_start_edx"])["date"]
+    date["date_delta"] = date["new_start_py"] - date["old_start_py"]
+
+    details = updateDetails(run, details)
+    details = updateDetails(date, details)
+    return details
 
 
 #########################
@@ -759,7 +765,7 @@ def main():
     lti_passports = []
     faq_filename = ""
 
-    details = updateDetails(handleBaseFiles(details), details)
+    details = handleBaseFiles(details)
     details = updateDetails(handlePolicies(details), details)
 
     scrapeChapters()
