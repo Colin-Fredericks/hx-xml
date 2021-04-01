@@ -113,11 +113,60 @@ def spaceOut(s, n, rl="left"):
 
 
 #########################
+# All the things we need to track
+#########################
+def setUpDetails(args):
+    details = {
+        # For all of these, if so, where?
+        "we_got_trouble": {
+            "discussion_links": [],  # Any links to the discussion boards?
+            "flash_links": [],  # Any Flash?
+            "top_tab_js": [],  # Any javascript that targets the top tabs?
+            "iframes": [],  # Any iframes?
+        },
+        "run": {
+            "old": "",
+            "new": args.run,
+            "id": "",
+            "old_start_edx": "",
+            "pacing": "instructor-paced",
+            "course_name": "",
+            "pathname": os.path.dirname(args.filename),
+            "lti_passports": [],
+            "display_name": "",
+        },
+        # TODO: replace the placeholder values below
+        "dates": {
+            "new_start_py": datetime.date.today(),
+            "new_end_py": datetime.date.today(),
+            "new_start_edx": "",
+            "new_end_edx": "",
+        },
+    }
+    return details
+
+
+# Updating the we_got_trouble or run data appropriately
+def updateDetails(new_info, details):
+    # "level 1" here is the new_info string.
+    for level2 in details[new_info]:
+        if new_info == level2:
+            if type(details[new_info][level2]) == list:
+                for item in new_info[level2]:
+                    details[new_info][level2].append(item)
+            if type(details[new_info][level2]) == string:
+                details[new_info][level2] = new_info[level2]
+            if type(details[new_info][level2]) == int:
+                details[new_info][level2] += new_info[level2]
+    return details
+
+
+#########################
 # Command Line Args
 #########################
 
 
-def getCommandLineArgs():
+def getCommandLineArgs(args):
 
     # Read in the filename and options
     parser = argparse.ArgumentParser(usage=instructions, add_help=False)
@@ -137,14 +186,14 @@ def getCommandLineArgs():
 
     if not os.path.exists(args.filename):
         sys.exit("Filename not found: " + args.filename)
-    pathname = os.path.dirname(args.filename)
+    args.pathname = os.path.dirname(args.filename)
 
     # Make a copy of the tarball for backup purposes
     shutil.copy2(args.filename, args.filename[:-7] + "_backup.tar.gz")
 
     # Extract the tarball.
     tar = tarfile.open(args.filename)
-    tar.extractall(pathname)
+    tar.extractall(args.pathname)
     tar.close()
 
     args.root_filename = "course/course.xml"
@@ -157,19 +206,16 @@ def getCommandLineArgs():
 #########################
 
 
-def getDates(use_new_dates):
-    # TODO: replace the placeholder values below
-    dates = {
-        "new_start_py": datetime.date.today(),
-        "new_end_py": datetime.date.today(),
-        "new_start_edx": "",
-        "new_end_edx": "",
-    }
+def getDates(args, details):
+    use_new_dates = args.dates
+    dates = details["dates"]
 
     dates["new_start_edx"] = pythonDateToEdx(
-        new_start_py, datetime.datetime.now().time()
+        dates["new_start_py"], datetime.datetime.now().time()
     )
-    dates["new_end_edx"] = pythonDateToEdx(new_end_py, datetime.datetime.now().time())
+    dates["new_end_edx"] = pythonDateToEdx(
+        dates["new_end_py"], datetime.datetime.now().time()
+    )
 
     # TODO: Allow command-line or file-driven entry of dates & times
     if use_new_dates:
@@ -194,37 +240,43 @@ def getDates(use_new_dates):
     return dates
 
 
-##################################################################################
+#########################
+# TODO: Update FAQ file
+#########################
+def updateFAQ(filename):
+    pass
+
+
+#########################
+# TODO: Update Related Course file
+#########################
+def updateRelated(filename):
+    pass
+
 
 #########################
 # Course base files
 #########################
 
 
-def handleBaseFiles(new_run, dates):
-    root_text = ""
-    course_name = ""
-    course_pacing = ""
-    run = {
-        "old": "",
-        "new": new_run,
-        "id": "",
-        "old_start_edx": "",
-        "pacing": "instructor-paced",
-    }
+def handleBaseFiles(details):
+    run = details["run"]
+    pathname = run["pathname"]
+    dates = details["dates"]
 
     # Open the course root file
-    root_file = os.path.join(pathname, "course", "course", new_run + ".xml")
-    rooty_root = ET.parse(run_file)
+    root_file = os.path.join(pathname, "course", "course", run["new"] + ".xml")
+    root_tree = ET.parse(root_file)
+    root_root = root_tree.getroot()
 
     # Get course ID
-    course_id = rooty_root.attrib.get("course", "unknown")
+    course_id = root_root.attrib.get("course", "unknown")
     # Change the /course.xml file to point to the new run.
-    run["old"] = rooty_root.attrib.get("url_name", "unknown")
-    rooty_root.set("url_name", run["new"])
+    run["old"] = root_root.attrib.get("url_name", "unknown")
+    root_root.set("url_name", run["new"])
 
     # Close course root.
-    tree.write(run_file, encoding="UTF-8", xml_declaration=False)
+    root_tree.write(root_file, encoding="UTF-8", xml_declaration=False)
 
     # Rename the course/course_run.xml file
     run_file = os.path.join(pathname, "course", "course", run["old"] + ".xml")
@@ -258,7 +310,11 @@ def handleBaseFiles(new_run, dates):
 ##########################
 
 
-def handlePolicies(run):
+def handlePolicies(pathname, details):
+    run = details["run"]
+    pathname = run["pathname"]
+    runpath = "course/" + run["new"]
+
     # Rename the policies/course_run folder
     runfolder = os.path.join(pathname, "course", "policies", run["old"])
     newfolder = os.path.join(pathname, "course", "policies", run["new"])
@@ -266,38 +322,40 @@ def handlePolicies(run):
         shutil.rmtree(newfolder)
     os.rename(runfolder, newfolder)
 
-    # TODO: Existence checks for a lot of these.
-    # TODO: Blackout dates
     # Open policies/course_run/policy.json
     data = dict()
     with open(
-        os.path.join(pathname, "course", "policies", new_run, "policy.json")
+        os.path.join(pathname, "course", "policies", run["new"], "policy.json")
     ) as f:
         data = json.load(f)
 
         # Set the root to "course/new_run"
-        data["course/" + new_run] = data["course/" + old_run]
+        data[runpath] = data["course/" + old_run]
         del data["course/" + old_run]
         # Clear any discussion blackouts.
-        data["course/" + new_run]["discussion_blackouts"] = []
+        data[runpath]["discussion_blackouts"] = []
         # Set the start and end dates
-        data["course/" + new_run]["start"] = new_start_edx
-        data["course/" + new_run]["end"] = new_end_edx
+        data[runpath]["start"] = new_start_edx
+        data[runpath]["end"] = new_end_edx
         # Set the xml_attributes:filename using new_run
-        data["course/" + new_run]["xml_attributes"]["filename"] = ["course/" + new_run]
+        data[runpath]["xml_attributes"]["filename"] = [runpath]
         # A few other default settings
-        data["course/" + new_run]["days_early_for_beta"] = 100.0
-
-        # TODO: Wipe all the old LTI keys and secrets.
+        data[runpath]["days_early_for_beta"] = 100.0
 
         # Items to handle later
-        lti_passports = data["course/" + new_run].get("lti_passports", [])
+        run["lti_passports"] = data[runpath].get("lti_passports", [])
+        run["display_name"] = data[runpath]["display_name"]
 
-        tabs = [x for x in data["course/" + new_run]["tabs"]]
+        # Update some standard tabs
+        tabs = [x for x in data[runpath]["tabs"]]
         faq_search = [x for x in tabs if "FAQ" in x["name"]]
         if len(faq_search) > 0:
-            faq_filename = faq_slug[0]["url_slug"]
-        display_name = data["course/" + new_run]["display_name"]
+            updateFAQ(faq_search[0]["url_slug"])
+        related_search = [x for x in tabs if "Related Courses" in x["name"]]
+        if len(related_search) > 0:
+            updateRelated(related_search[0]["related_search"])
+
+    return run
 
 
 ################################
@@ -308,13 +366,11 @@ def handlePolicies(run):
 # Update the FAQ page.
 # Pull new version of hx.js and update
 
-# Find all instances of course_run in XML and HTML files,
-# and replace them with the new one.
 
 ################################
 # Chapter scraping
 ################################
-def scrapeChapters():
+def scrapeChapters(pathname):
     # How many chapters have weekly highlights set?
     # Open everything in the chapter/ folder
     num_highlights = 0
@@ -496,14 +552,6 @@ def scrapeProblems():
         "formularesponse": "math formula",
     }
 
-    # For all of these, if so, where?
-    we_got_trouble = {
-        "discussion_links": [],  # Any links to the discussion boards?
-        "flash_links": [],  # Any Flash?
-        "top_tab_js": [],  # Any javascript that targets the top tabs?
-        "iframes": [],  # Any iframes?
-    }
-
     # Open everything in the problem/ folder
     for dirpath, dirnames, filenames in os.walk(
         os.path.join(pathname, "course", "problem")
@@ -539,9 +587,7 @@ def scrapeProblems():
 ################################
 # HTML and Tab Scraping
 ################################
-
-
-def scrapePage(file_contents, filename, folder):
+def scrapePage(file_contents, filename, folder, run):
     # Get the whole-file text so we can search it:
     txt = file_contents.read()
 
@@ -561,8 +607,14 @@ def scrapePage(file_contents, filename, folder):
     ):
         we_got_trouble["top_tab_js"].append(folder + "/" + filename)
 
+    # TODO: Update static links
+    # Find all instances of course_run in XML and HTML files,
+    # and replace them with the new one.
 
-def scrapeFolder(folder):
+    return we_got_trouble
+
+
+def scrapeFolder(folder, run):
     if folder == "html" or folder == "tabs":
         extension = ".html"
     else:
@@ -576,7 +628,7 @@ def scrapeFolder(folder):
             with open(
                 os.path.join(pathname, "course", folder, eachfile), mode="r"
             ) as file_contents:
-                scrapePage(file_contents, eachfile, folder)
+                return scrapePage(file_contents, eachfile, folder, run)
 
 
 # TODO: Re-tar
@@ -587,27 +639,29 @@ def scrapeFolder(folder):
 ################################
 
 
-def createSummary():
+def createSummary(details, dates):
+    run = details["run"]
+
     # Create high-level summary of course as takeaway file.
-    summary_file = os.path.join(pathname, course_name + "_" + new_run + ".txt")
+    summary_file = os.path.join(run["pathname"], course_name + "_" + new_run + ".txt")
     if os.path.exists(summary_file):
         os.remove(summary_file)
     with open(
-        os.path.join(pathname, course_name + "_" + new_run + ".txt"), "a"
+        os.path.join(run["pathname"], course_name + "_" + new_run + ".txt"), "a"
     ) as summary:
         txt = ""
         txt += "Course Summary\n"
         txt += "--------------\n"
         txt += "\n"
         txt += "Course name: " + display_name + "\n"
-        txt += "Identifier: " + course_id + " " + new_run + "\n"
-        txt += "New Start: " + new_start_edx + "\n"
+        txt += "Identifier: " + run["id"] + " " + run["new"] + "\n"
+        txt += "New Start: " + dates["new_start_edx"] + "\n"
         if starts_in_past:
             print("WARNING: course starts in the past")
-        txt += "New End: " + new_end_edx + "\n"
+        txt += "New End: " + dates["new_end_edx"] + "\n"
         if ends_in_past:
             print("WARNING: course ends in the past")
-        txt += "Pacing: " + course_pacing + "\n"
+        txt += "Pacing: " + run["pacing"] + "\n"
         txt += "\n"
         txt += "Number of sections: " + str(num_chapters) + "\n"
         txt += "Highlights set for " + str(num_highlights) + " sections" + "\n"
@@ -678,6 +732,9 @@ def createSummary():
         else:
             txt += "No LTI tools.\n"
 
+        txt += "\n"
+        txt += "Discussion blackout dates removed."
+
         # General maintenance items
         # Number of ORA ("openassessment" tag)
         # How many discussion components are there? ("discussion" tag)
@@ -695,25 +752,26 @@ def createSummary():
 #######################
 def main():
 
-    args = getCommandLineArgs()
-    dates = getDates(args.dates)
+    args = getCommandLineArgs(sys.argv)
+    details = setUpDetails(args)
+    dates = getDates(args, details)
 
     lti_passports = []
     faq_filename = ""
 
-    handleBaseFiles(args.run, dates)
-    handlePolicies(run)
+    details = updateDetails(handleBaseFiles(details), details)
+    details = updateDetails(handlePolicies(details), details)
 
     scrapeChapters()
     scrapeVerticals()
 
-    scrapeFolder("html")
-    scrapeFolder("tabs")
-    scrapeFolder("problem")
-    scrapeProblems()
-    scrapeVideos()
+    details = updateDetails(scrapeFolder("html", run), details)
+    details = updateDetails(scrapeFolder("tabs", run), details)
+    details = updateDetails(scrapeFolder("problem", run), details)
+    details = updateDetails(scrapeProblems(), details)
+    details = updateDetails(scrapeVideos(), details)
 
-    createSummary(dates)
+    createSummary(args.pathname, details, dates)
 
     createNewTar()
 
