@@ -32,8 +32,6 @@ Last update: March 30th 2021
 ######################
 # Utility Functions
 ######################
-
-
 def edxDateToPython(date_string):
     # date_string is in edx's format: 2030-01-01T00:00:00+00:00
     # split on -, T, :, and +
@@ -145,13 +143,35 @@ def setUpDetails(args):
             "old_end_edx": "",
             "date_delta": "",
         },
+        "chapters": {"num_chapters": 0, "num_highlights": 0},
+        "verticals": {"component_count": OrderedDict()},
+        "problems": {
+            "choiceresponse": 0,
+            "customresponse": 0,
+            "optioninput": 0,
+            "numericalresponse": 0,
+            "multiplechoiceresponse": 0,
+            "stringresponse": 0,
+            "formularesponse": 0,
+        },
+        "videos": {
+            "num_videos": 0,
+            "youtube_videos": 0,
+            "num_videos": 0,
+            "num_downloadable_videos": 0,
+            "num_downloadable_transcripts": 0,
+            "lengths": [],
+            "max_length": "",
+            "median_length": "",
+            "min_length": "",
+            "total_length": "",
+        },
     }
     return details
 
 
 # Updating the trouble or run data appropriately
 def updateDetails(new_info, category, details):
-    print(new_info)
     # "level 1" here is the category string.
     # TODO: This was written like shit. Rewrite the whole thing.
     for level2 in details[category]:
@@ -170,8 +190,6 @@ def updateDetails(new_info, category, details):
 #########################
 # Command Line Args
 #########################
-
-
 def getCommandLineArgs(args):
 
     # Read in the filename and options
@@ -194,14 +212,6 @@ def getCommandLineArgs(args):
         sys.exit("Filename not found: " + args.filename)
     args.pathname = os.path.dirname(args.filename)
 
-    # Make a copy of the tarball for backup purposes
-    shutil.copy2(args.filename, args.filename[:-7] + "_backup.tar.gz")
-
-    # Extract the tarball.
-    tar = tarfile.open(args.filename)
-    tar.extractall(args.pathname)
-    tar.close()
-
     args.root_filename = "course/course.xml"
 
     return args
@@ -210,8 +220,6 @@ def getCommandLineArgs(args):
 #########################
 # Dates
 #########################
-
-
 def getDates(args, details):
     use_new_dates = args.dates
     dates = details["dates"]
@@ -264,8 +272,6 @@ def updateRelated(filename):
 #########################
 # Course base files
 #########################
-
-
 def handleBaseFiles(details):
     run = details["run"]
     pathname = run["pathname"]
@@ -317,10 +323,9 @@ def handleBaseFiles(details):
 #########################
 # Policies folder
 ##########################
-
-
-def handlePolicies(pathname, details):
+def handlePolicies(details):
     run = details["run"]
+    dates = details["dates"]
     pathname = run["pathname"]
     runpath = "course/" + run["new"]
 
@@ -339,13 +344,13 @@ def handlePolicies(pathname, details):
         data = json.load(f)
 
         # Set the root to "course/new_run"
-        data[runpath] = data["course/" + old_run]
-        del data["course/" + old_run]
+        data[runpath] = data["course/" + run["old"]]
+        del data["course/" + run["old"]]
         # Clear any discussion blackouts.
         data[runpath]["discussion_blackouts"] = []
         # Set the start and end dates
-        data[runpath]["start"] = new_start_edx
-        data[runpath]["end"] = new_end_edx
+        data[runpath]["start"] = dates["new_start_edx"]
+        data[runpath]["end"] = dates["new_end_edx"]
         # Set the xml_attributes:filename using new_run
         data[runpath]["xml_attributes"]["filename"] = [runpath]
         # A few other default settings
@@ -380,13 +385,12 @@ def handlePolicies(pathname, details):
 ################################
 # Chapter scraping
 ################################
-def scrapeChapters(pathname):
+def scrapeChapters(details):
     # How many chapters have weekly highlights set?
     # Open everything in the chapter/ folder
-    num_highlights = 0
-    num_chapters = 0
+    chapters = {"num_chapters": 0, "num_highlights": 0}
     for dirpath, dirnames, filenames in os.walk(
-        os.path.join(pathname, "course", "chapter")
+        os.path.join(details["run"]["pathname"], "course", "chapter")
     ):
         for eachfile in filenames:
 
@@ -397,9 +401,9 @@ def scrapeChapters(pathname):
             # If there's a highlights attribute set, then there are highlights.
             # If not, then no.
             if root.attrib.get("highlights", False):
-                num_highlights += 1
+                chapters["num_highlights"] += 1
 
-            num_chapters += 1
+            chapters["num_chapters"] += 1
 
     details = updateDetails(chapters, "chapters", details)
     return details
@@ -408,7 +412,7 @@ def scrapeChapters(pathname):
 ################################
 # Vertical scraping
 ################################
-def scrapeVerticals():
+def scrapeVerticals(details):
 
     # TODO: Add LTI components
 
@@ -417,7 +421,7 @@ def scrapeVerticals():
     component_count = {}
     # Open everything in the vertical/ folder
     for dirpath, dirnames, filenames in os.walk(
-        os.path.join(pathname, "course", "vertical")
+        os.path.join(details["run"]["pathname"], "course", "vertical")
     ):
         for eachfile in filenames:
 
@@ -463,6 +467,7 @@ def scrapeVerticals():
 
     # Alphabetizing
     component_count_sorted = OrderedDict(sorted(component_count.items()))
+    verticals = {"component_count": component_count_sorted}
 
     details = updateDetails(verticals, "verticals", details)
     return details
@@ -471,21 +476,25 @@ def scrapeVerticals():
 ################################
 # Video scraping
 ################################
-
-
-def scrapeVideos():
+def scrapeVideos(details):
     # Are any videos still pointing to YouTube?
     # What % of videos are downloadable?
 
-    num_videos = 0
-    youtube_videos = 0
-    num_videos = 0
-    num_downloadable_videos = 0
-    num_downloadable_transcripts = 0
-    video_lengths = []
+    videos = {
+        "num_videos": 0,
+        "youtube_videos": 0,
+        "num_videos": 0,
+        "num_downloadable_videos": 0,
+        "num_downloadable_transcripts": 0,
+        "lengths": [],
+        "max_length": "",
+        "median_length": "",
+        "min_length": "",
+        "total_length": "",
+    }
     # Open everything in the video/ folder
     for dirpath, dirnames, filenames in os.walk(
-        os.path.join(pathname, "course", "video")
+        os.path.join(details["run"]["pathname"], "course", "video")
     ):
         for eachfile in filenames:
 
@@ -495,38 +504,29 @@ def scrapeVideos():
 
             if root.attrib.get("youtube_id_1_0", False):
                 if root.attrib["youtube_id_1_0"] != "":
-                    youtube_videos += 1
+                    videos["youtube_videos"] += 1
             if root.attrib.get("download_video", False):
                 if root.attrib["download_video"] == "true":
-                    num_downloadable_videos += 1
+                    videos["num_downloadable_videos"] += 1
             if root.attrib.get("download_track", False):
                 if root.attrib["download_track"] == "true":
-                    num_downloadable_transcripts += 1
-            if root.attrib["youtube_id_1_0"] != "":
-                youtube_videos += 1
+                    videos["num_downloadable_transcripts"] += 1
 
             # Getting video durations
             asset_tag = root.find("video_asset")
             if asset_tag is not None:
                 if asset_tag.attrib.get("duration", False):
-                    video_lengths.append(float(asset_tag.attrib["duration"]))
+                    videos["lengths"].append(float(asset_tag.attrib["duration"]))
 
-            num_videos += 1
+            videos["num_videos"] += 1
 
-    percent_downloadable_vid = num_downloadable_videos / num_videos
-    percent_downloadable_trans = num_downloadable_transcripts / num_videos
-
-    video_max_length = ""
-    video_median_length = ""
-    video_min_length = ""
-    video_total_length = ""
-    if len(video_lengths) > 0:
-        video_max_length = secondsToHMS(max(video_lengths))
-        video_median_length = secondsToHMS(median(video_lengths))
-        video_min_length = secondsToHMS(min(video_lengths))
-        video_total_length = secondsToHMS(sum(video_lengths))
+    if len(videos["lengths"]) > 0:
+        videos["max_length"] = secondsToHMS(max(videos["lengths"]))
+        videos["median_length"] = secondsToHMS(median(videos["lengths"]))
+        videos["min_length"] = secondsToHMS(min(videos["lengths"]))
+        videos["total_length"] = secondsToHMS(sum(videos["lengths"]))
     else:
-        video_total_length = "Unknown. Course uses old-style video tags."
+        videos["total_length"] = "Unknown. Course uses old-style video tags."
 
     details = updateDetails(videos, "videos", details)
     return details
@@ -535,9 +535,7 @@ def scrapeVideos():
 ################################
 # Problem scraping
 ################################
-
-
-def scrapeProblems():
+def scrapeProblems(details):
     # Count the number of problems of each assignment type
     # What % of content is gated?
     num_problems = 0
@@ -570,10 +568,11 @@ def scrapeProblems():
         "stringresponse": "text",
         "formularesponse": "math formula",
     }
+    trouble = {}
 
     # Open everything in the problem/ folder
     for dirpath, dirnames, filenames in os.walk(
-        os.path.join(pathname, "course", "problem")
+        os.path.join(details["run"]["pathname"], "course", "problem")
     ):
         for eachfile in filenames:
 
@@ -589,7 +588,8 @@ def scrapeProblems():
             # They won't be at a reliable depth in the problem XML,
             # So we need to dump the full problem file text to get them.
             with open(
-                os.path.join(pathname, "course", "problem", eachfile), mode="r"
+                os.path.join(details["run"]["pathname"], "course", "problem", eachfile),
+                mode="r",
             ) as p:
                 # Get the whole-file text so we can search it:
                 problem_text = p.read()
@@ -602,7 +602,7 @@ def scrapeProblems():
 
             num_problems += 1
 
-    details = updateDetails(problems, "problems", details)
+    details = updateDetails(problem_type_count, "problems", details)
     details = updateDetails(trouble, "trouble", details)
     return details
 
@@ -610,7 +610,10 @@ def scrapeProblems():
 ################################
 # HTML and Tab Scraping
 ################################
-def scrapePage(file_contents, filename, folder, run):
+def scrapePage(file_contents, filename, folder, details):
+    trouble = {}
+    run = details["run"]
+
     # Get the whole-file text so we can search it:
     txt = file_contents.read()
 
@@ -638,7 +641,8 @@ def scrapePage(file_contents, filename, folder, run):
     return details
 
 
-def scrapeFolder(folder, run):
+def scrapeFolder(folder, details):
+    pathname = details["run"]["pathname"]
     if folder == "html" or folder == "tabs":
         extension = ".html"
     else:
@@ -652,7 +656,7 @@ def scrapeFolder(folder, run):
             with open(
                 os.path.join(pathname, "course", folder, eachfile), mode="r"
             ) as file_contents:
-                return scrapePage(file_contents, eachfile, folder, run)
+                return scrapePage(file_contents, eachfile, folder, details)
 
 
 # TODO: Re-tar
@@ -661,8 +665,6 @@ def scrapeFolder(folder, run):
 ################################
 # High-level summary
 ################################
-
-
 def createSummary(details):
     run = details["run"]
     dates = details["dates"]
@@ -778,6 +780,15 @@ def createSummary(details):
 def main():
 
     args = getCommandLineArgs(sys.argv)
+
+    # Make a copy of the tarball for backup purposes
+    shutil.copy2(args.filename, args.filename[:-7] + "_backup.tar.gz")
+
+    # Extract the tarball.
+    tar = tarfile.open(args.filename)
+    tar.extractall(args.pathname)
+    tar.close()
+
     details = setUpDetails(args)
     details = getDates(args, details)
 
@@ -787,16 +798,16 @@ def main():
     details = handleBaseFiles(details)
     details = handlePolicies(details)
 
-    scrapeChapters()
-    scrapeVerticals()
+    details = scrapeChapters(details)
+    details = scrapeVerticals(details)
 
     details = scrapeFolder("html", details)
     details = scrapeFolder("tabs", details)
     details = scrapeFolder("problem", details)
-    details = scrapeProblems()
-    details = scrapeVideos()
+    details = scrapeProblems(details)
+    details = scrapeVideos(details)
 
-    createSummary(args.pathname, details, dates)
+    createSummary(details)
 
     createNewTar()
 
