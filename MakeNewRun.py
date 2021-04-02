@@ -146,6 +146,8 @@ def setUpDetails(args):
         "chapters": {"num_chapters": 0, "num_highlights": 0},
         "verticals": {"component_count": OrderedDict()},
         "problems": {
+            "total": 0,
+            "ungated": 0,
             "choiceresponse": 0,
             "customresponse": 0,
             "optioninput": 0,
@@ -538,8 +540,7 @@ def scrapeVideos(details):
 def scrapeProblems(details):
     # Count the number of problems of each assignment type
     # What % of content is gated?
-    num_problems = 0
-    num_ungated_problems = 0
+    problems = {"total": 0, "ungated": 0, "solutions": 0}
     num_solutions = 0
     problem_types = [
         "choiceresponse",
@@ -591,11 +592,15 @@ def scrapeProblems(details):
                 os.path.join(details["run"]["pathname"], "course", "problem", eachfile),
                 mode="r",
             ) as p:
-                # Get the whole-file text so we can search it:
+                # Get the whole-file text so we can search it.
                 problem_text = p.read()
 
                 if "/discusison/forum" in problem_text:
                     trouble["discussion_links"].append("problem/" + eachfile)
+                # TODO: Can we replace this with a ET.find() command?
+                if "<solution" in problem_text:
+                    problems["solutions"] += 1
+                # TODO: Can we replace this with a ET.find() command?
                 for t in problem_types:
                     if t in problem_text:
                         problem_type_count[t] = problem_type_count[t] + 1
@@ -668,6 +673,8 @@ def scrapeFolder(folder, details):
 def createSummary(details):
     run = details["run"]
     dates = details["dates"]
+    videos = details["videos"]
+    component_count = details["verticals"]["component_count"]
 
     # Create high-level summary of course as takeaway file.
     summary_file = os.path.join(run["pathname"], course_name + "_" + new_run + ".txt")
@@ -694,27 +701,31 @@ def createSummary(details):
         txt += "Highlights set for " + str(num_highlights) + " sections" + "\n"
         txt += "\n"
         txt += "Video statistics:\n"
-        txt += "  Number of videos: " + str(num_videos) + "\n"
-        txt += "  Downloadable videos: " + str(num_downloadable_videos) + "\n"
-        txt += "  Downloadable transcripts: " + str(num_downloadable_transcripts) + "\n"
-        txt += "  Total duration: " + video_total_length + "\n"
+        txt += "  Number of videos: " + str(videos["num_videos"]) + "\n"
+        txt += "  Downloadable videos: " + str(videos["num_downloadable_videos"]) + "\n"
+        txt += (
+            "  Downloadable transcripts: "
+            + str(videos["num_downloadable_transcripts"])
+            + "\n"
+        )
+        txt += "  Total duration: " + videos["total_length"] + "\n"
         txt += (
             "  Max: "
-            + video_max_length
+            + videos["max_length"]
             + "  Median: "
-            + video_median_length
+            + videos["median_length"]
             + "  Min: "
-            + video_min_length
+            + videos["min_length"]
             + "\n"
         )
         txt += "\n"
         txt += "Component Count:\n"
 
         # Types of problems
-        for c in component_count_sorted:
+        for c in component_count:
             txt += (
                 "  "
-                + spaceOut(str(component_count_sorted[c]), 4, "right")
+                + spaceOut(str(component_count[c]), 4, "right")
                 + " "
                 + c
                 + " components\n"
@@ -722,7 +733,7 @@ def createSummary(details):
 
         txt += "\n"
         txt += "Number of problems: " + str(num_problems) + "\n"
-        txt += "Number of ungated problems: " + str(num_problems) + "\n"
+        txt += "Number of ungated problems: " + str(num_ungated_problems) + "\n"
 
         # Types of problems
         for t in problem_type_translator:
