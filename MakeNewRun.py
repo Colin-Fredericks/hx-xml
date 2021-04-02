@@ -118,7 +118,7 @@ def spaceOut(s, n, rl="left"):
 def setUpDetails(args):
     details = {
         # For all of these, if so, where?
-        "we_got_trouble": {
+        "trouble": {
             "discussion_links": [],  # Any links to the discussion boards?
             "flash_links": [],  # Any Flash?
             "top_tab_js": [],  # Any javascript that targets the top tabs?
@@ -149,19 +149,21 @@ def setUpDetails(args):
     return details
 
 
-# Updating the we_got_trouble or run data appropriately
-def updateDetails(new_info, details):
+# Updating the trouble or run data appropriately
+def updateDetails(new_info, category, details):
     print(new_info)
-    # "level 1" here is the new_info string.
-    for level2 in details[new_info]:
-        if new_info == level2:
-            if type(details[new_info][level2]) == list:
-                for item in new_info[level2]:
-                    details[new_info][level2].append(item)
-            elif type(details[new_info][level2]) == int:
-                details[new_info][level2] += new_info[level2]
-            else:
-                details[new_info][level2] = new_info[level2]
+    # "level 1" here is the category string.
+    # TODO: This was written like shit. Rewrite the whole thing.
+    for level2 in details[category]:
+        for item in new_info:
+            if level2 == item:
+                if type(details[category][level2]) == list:
+                    for element in item:
+                        details[category][level2].append(element)
+                elif type(details[category][level2]) == int:
+                    details[category][level2] += new_info[level2]
+                else:
+                    details[category][level2] = new_info[level2]
     return details
 
 
@@ -241,7 +243,8 @@ def getDates(args, details):
     if ends_in_past:
         sys.exit("WARNING: Your end date is in the past.")
 
-    return dates
+    details = updateDetails(dates, "dates", details)
+    return details
 
 
 #########################
@@ -306,8 +309,8 @@ def handleBaseFiles(details):
     date["old_start_py"] = edxDateToPython(date["old_start_edx"])["date"]
     date["date_delta"] = date["new_start_py"] - date["old_start_py"]
 
-    details = updateDetails(run, details)
-    details = updateDetails(date, details)
+    details = updateDetails(run, "run", details)
+    details = updateDetails(date, "dates", details)
     return details
 
 
@@ -361,7 +364,8 @@ def handlePolicies(pathname, details):
         if len(related_search) > 0:
             updateRelated(related_search[0]["related_search"])
 
-    return run
+    details = updateDetails(run, "run", details)
+    return details
 
 
 ################################
@@ -396,6 +400,9 @@ def scrapeChapters(pathname):
                 num_highlights += 1
 
             num_chapters += 1
+
+    details = updateDetails(chapters, "chapters", details)
+    return details
 
 
 ################################
@@ -457,6 +464,9 @@ def scrapeVerticals():
     # Alphabetizing
     component_count_sorted = OrderedDict(sorted(component_count.items()))
 
+    details = updateDetails(verticals, "verticals", details)
+    return details
+
 
 ################################
 # Video scraping
@@ -517,6 +527,9 @@ def scrapeVideos():
         video_total_length = secondsToHMS(sum(video_lengths))
     else:
         video_total_length = "Unknown. Course uses old-style video tags."
+
+    details = updateDetails(videos, "videos", details)
+    return details
 
 
 ################################
@@ -582,12 +595,16 @@ def scrapeProblems():
                 problem_text = p.read()
 
                 if "/discusison/forum" in problem_text:
-                    we_got_trouble["discussion_links"].append("problem/" + eachfile)
+                    trouble["discussion_links"].append("problem/" + eachfile)
                 for t in problem_types:
                     if t in problem_text:
                         problem_type_count[t] = problem_type_count[t] + 1
 
             num_problems += 1
+
+    details = updateDetails(problems, "problems", details)
+    details = updateDetails(trouble, "trouble", details)
+    return details
 
 
 ################################
@@ -598,11 +615,11 @@ def scrapePage(file_contents, filename, folder, run):
     txt = file_contents.read()
 
     if "<iframe" in txt:
-        we_got_trouble["iframes"].append(folder + "/" + filename)
+        trouble["iframes"].append(folder + "/" + filename)
     if ".swf" in txt:
-        we_got_trouble["flash_links"].append(folder + "/" + filename)
+        trouble["flash_links"].append(folder + "/" + filename)
     if "/discusison/forum" in txt:
-        we_got_trouble["discussion_links"].append(folder + "/" + filename)
+        trouble["discussion_links"].append(folder + "/" + filename)
     if (
         "$('.navbar')" in txt
         or "$('.course-tabs')" in txt
@@ -611,13 +628,14 @@ def scrapePage(file_contents, filename, folder, run):
         or '$(".course-tabs")' in txt
         or '$(".navbar-nav")' in txt
     ):
-        we_got_trouble["top_tab_js"].append(folder + "/" + filename)
+        trouble["top_tab_js"].append(folder + "/" + filename)
 
     # TODO: Update static links
     # Find all instances of course_run in XML and HTML files,
     # and replace them with the new one.
 
-    return we_got_trouble
+    details = updateDetails(trouble, "trouble", details)
+    return details
 
 
 def scrapeFolder(folder, run):
@@ -645,8 +663,9 @@ def scrapeFolder(folder, run):
 ################################
 
 
-def createSummary(details, dates):
+def createSummary(details):
     run = details["run"]
+    dates = details["dates"]
 
     # Create high-level summary of course as takeaway file.
     summary_file = os.path.join(run["pathname"], course_name + "_" + new_run + ".txt")
@@ -715,8 +734,8 @@ def createSummary(details, dates):
 
         # Trouble section
         txt += "\n"
-        for troub in we_got_trouble:
-            if len(we_got_trouble[troub]) > 0:
+        for troub in trouble:
+            if len(trouble[troub]) > 0:
                 if troub == "discussion_links":
                     txt += "Direct links to discussion boards:\n"
                 elif troub == "flash_links":
@@ -726,7 +745,7 @@ def createSummary(details, dates):
                 elif troub == "iframes":
                     txt += "Components with iframes:\n"
 
-                for l in we_got_trouble[troub]:
+                for l in trouble[troub]:
                     txt += str(l) + "\n"
 
         # Summarize LTI tools & keys
@@ -760,22 +779,22 @@ def main():
 
     args = getCommandLineArgs(sys.argv)
     details = setUpDetails(args)
-    dates = getDates(args, details)
+    details = getDates(args, details)
 
     lti_passports = []
     faq_filename = ""
 
     details = handleBaseFiles(details)
-    details = updateDetails(handlePolicies(details), details)
+    details = handlePolicies(details)
 
     scrapeChapters()
     scrapeVerticals()
 
-    details = updateDetails(scrapeFolder("html", run), details)
-    details = updateDetails(scrapeFolder("tabs", run), details)
-    details = updateDetails(scrapeFolder("problem", run), details)
-    details = updateDetails(scrapeProblems(), details)
-    details = updateDetails(scrapeVideos(), details)
+    details = scrapeFolder("html", details)
+    details = scrapeFolder("tabs", details)
+    details = scrapeFolder("problem", details)
+    details = scrapeProblems()
+    details = scrapeVideos()
 
     createSummary(args.pathname, details, dates)
 
