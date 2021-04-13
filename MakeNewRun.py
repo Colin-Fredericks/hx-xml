@@ -332,11 +332,12 @@ def handlePolicies(details):
     runpath = "course/" + run["new"]
 
     # Rename the policies/course_run folder
-    runfolder = os.path.join(pathname, "course", "policies", run["old"])
-    newfolder = os.path.join(pathname, "course", "policies", run["new"])
-    if os.path.exists(newfolder):
-        shutil.rmtree(newfolder)
-    os.rename(runfolder, newfolder)
+    if new_run != old_run:
+        runfolder = os.path.join(pathname, "course", "policies", run["old"])
+        newfolder = os.path.join(pathname, "course", "policies", run["new"])
+        if os.path.exists(newfolder):
+            shutil.rmtree(newfolder)
+            os.rename(runfolder, newfolder)
 
     # Open policies/course_run/policy.json
     data = dict()
