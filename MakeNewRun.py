@@ -32,6 +32,13 @@ Last update: March 30th 2021
 ######################
 # Utility Functions
 ######################
+def findAllChildren(node, element):
+    for item in node.findall(element):
+        yield item
+        for child in findAllChildren(item, element):
+            yield child
+
+
 def edxDateToPython(date_string):
     # date_string is in edx's format: 2030-01-01T00:00:00+00:00
     # sometimes ends with a Z instead of +whatever
@@ -124,6 +131,7 @@ def setUpDetails(args):
             "flash_links": [],  # Any Flash?
             "top_tab_js": [],  # Any javascript that targets the top tabs?
             "iframes": [],  # Any iframes?
+            "no_solution": [],  # Problems without solutions
         },
         "run": {
             "old": "",
@@ -249,13 +257,6 @@ def getDates(args, details):
         dates["new_start_py"] = edxDateToPython(dates["new_start_edx"])["date"]
         dates["new_end_py"] = edxDateToPython(dates["new_end_edx"])["date"]
 
-    starts_in_past = dates["new_start_py"] < datetime.date.today()
-    ends_in_past = dates["new_end_py"] < datetime.date.today()
-    if starts_in_past:
-        sys.exit("WARNING: Your start date is in the past.")
-    if ends_in_past:
-        sys.exit("WARNING: Your end date is in the past.")
-
     details = updateDetails(dates, "dates", details)
     return details
 
@@ -335,7 +336,7 @@ def handlePolicies(details):
     runpath = "course/" + run["new"]
 
     # Rename the policies/course_run folder
-    if new_run != old_run:
+    if run["new"] != run["old"]:
         runfolder = os.path.join(pathname, "course", "policies", run["old"])
         newfolder = os.path.join(pathname, "course", "policies", run["new"])
         if os.path.exists(newfolder):
@@ -350,8 +351,10 @@ def handlePolicies(details):
         data = json.load(f)
 
         # Set the root to "course/new_run"
-        data[runpath] = data["course/" + run["old"]]
-        del data["course/" + run["old"]]
+        if run["new"] != run["old"]:
+            data[runpath] = data["course/" + run["old"]]
+            del data["course/" + run["old"]]
+
         # Clear any discussion blackouts.
         data[runpath]["discussion_blackouts"] = []
         # Set the start and end dates
@@ -585,9 +588,20 @@ def scrapeProblems(details):
             tree = ET.parse(os.path.join(dirpath, eachfile))
             root = tree.getroot()
 
+            # Is this problem outside the paywall?
             if root.attrib.get("group_access", False):
                 if root.attrib["group_access"] == "{&quot;51&quot;: [1, 2]}":
-                    num_ungated_problems += 1
+                    problems["ungated"] += 1
+
+            # Does this problem have a non-empty solution?
+            solutions = list(findAllChildren(root, "solution"))
+            solution_texts = [ET.tostring(x, method="text") for x in solutions]
+            non_empty_solutions = [len(x) for x in solution_texts]
+            if sum(non_empty_solutions) > 0:
+                problems["solutions"] += 1
+            for T in solution_texts:
+                if len(T) == 0:
+                    trouble["no_solution"].append("problem/" + filename)
 
             # Check for specific problem types and count them.
             # They won't be at a reliable depth in the problem XML,
@@ -609,7 +623,7 @@ def scrapeProblems(details):
                     if t in problem_text:
                         problem_type_count[t] = problem_type_count[t] + 1
 
-            num_problems += 1
+            problems["total"] += 1
 
     details = updateDetails(problem_type_count, "problems", details)
     details = updateDetails(trouble, "trouble", details)
@@ -681,28 +695,36 @@ def createSummary(details):
     component_count = details["verticals"]["component_count"]
 
     # Create high-level summary of course as takeaway file.
-    summary_file = os.path.join(run["pathname"], course_name + "_" + new_run + ".txt")
+    summary_file = os.path.join(
+        run["pathname"], run["course_name"] + "_" + run["new"] + ".txt"
+    )
     if os.path.exists(summary_file):
         os.remove(summary_file)
     with open(
-        os.path.join(run["pathname"], course_name + "_" + new_run + ".txt"), "a"
+        os.path.join(run["pathname"], run["course_name"] + "_" + run["new"] + ".txt"),
+        "a",
     ) as summary:
         txt = ""
         txt += "Course Summary\n"
         txt += "--------------\n"
         txt += "\n"
-        txt += "Course name: " + display_name + "\n"
+        txt += "Course name: " + run["display_name"] + "\n"
         txt += "Identifier: " + run["id"] + " " + run["new"] + "\n"
         txt += "New Start: " + dates["new_start_edx"] + "\n"
-        if starts_in_past:
-            print("WARNING: course starts in the past")
+        if dates["new_start_py"] < datetime.date.today():
+            txt += "WARNING: course starts in the past"
         txt += "New End: " + dates["new_end_edx"] + "\n"
-        if ends_in_past:
-            print("WARNING: course ends in the past")
+        if dates["new_end_py"] < datetime.date.today():
+            txt += "WARNING: course ends in the past"
         txt += "Pacing: " + run["pacing"] + "\n"
         txt += "\n"
-        txt += "Number of sections: " + str(num_chapters) + "\n"
-        txt += "Highlights set for " + str(num_highlights) + " sections" + "\n"
+        txt += "Number of sections: " + str(details["chapter"]["num_chapters"]) + "\n"
+        txt += (
+            "Highlights set for "
+            + str(details["chapter"]["num_highlights"])
+            + " sections"
+            + "\n"
+        )
         txt += "\n"
         txt += "Video statistics:\n"
         txt += "  Number of videos: " + str(videos["num_videos"]) + "\n"
@@ -753,6 +775,8 @@ def createSummary(details):
         txt += "\n"
         for troub in trouble:
             if len(trouble[troub]) > 0:
+                if troub == "no_solution":
+                    txt += "Problems without solutions:\n"
                 if troub == "discussion_links":
                     txt += "Direct links to discussion boards:\n"
                 elif troub == "flash_links":
