@@ -137,10 +137,10 @@ def setUpDetails(args):
             "lti_passports": [],
             "display_name": "",
         },
-        # TODO: replace the placeholder values below
+        # Note the placeholder values: Course starts today, ends a year from today.
         "dates": {
             "new_start_py": datetime.date.today(),
-            "new_end_py": datetime.date.today(),
+            "new_end_py": datetime.date.today() + datetime.timedelta(365),
             "new_start_edx": "",
             "new_end_edx": "",
             "old_start_edx": "",
@@ -181,7 +181,6 @@ def setUpDetails(args):
 # Updating the trouble or run data appropriately
 def updateDetails(new_info, category, details):
     # "level 1" here is the category string.
-    # TODO: This was written like shit. Rewrite the whole thing.
     for level2 in details[category]:
         for item in new_info:
             if level2 == item:
@@ -210,6 +209,7 @@ def getCommandLineArgs(args):
 
     ###########################
     # TODO: Handle input from JSON file
+    # Including dates and times
     ###########################
     # parser.add_argument("file", action="store")
 
@@ -240,7 +240,6 @@ def getDates(args, details):
         dates["new_end_py"], datetime.datetime.now().time()
     )
 
-    # TODO: Allow command-line or file-driven entry of dates & times
     if use_new_dates:
         start_date = input("Start date (yyyy-mm-dd) = ")
         start_time = input("Start time (24h:min:sec) = ")
@@ -664,9 +663,6 @@ def scrapeFolder(folder, details):
                 return scrapePage(file_contents, eachfile, folder, details)
 
 
-# TODO: Re-tar
-
-
 ################################
 # High-level summary
 ################################
@@ -847,6 +843,7 @@ def main():
 
     createSummary(details)
 
+    # TODO: re-tar
     # createNewTar()
 
 
