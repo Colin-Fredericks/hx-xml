@@ -240,11 +240,12 @@ tree.write(run_file, encoding="UTF-8", xml_declaration=False)
 ##########################
 
 # Rename the policies/course_run folder
-runfolder = os.path.join(pathname, "course", "policies", old_run)
-newfolder = os.path.join(pathname, "course", "policies", new_run)
-if os.path.exists(newfolder):
-    shutil.rmtree(newfolder)
-os.rename(runfolder, newfolder)
+if new_run != old_run:
+    runfolder = os.path.join(pathname, "course", "policies", old_run)
+    newfolder = os.path.join(pathname, "course", "policies", new_run)
+    if os.path.exists(newfolder):
+        shutil.rmtree(newfolder)
+    os.rename(runfolder, newfolder)
 
 
 # TODO: Existence checks for a lot of these.
@@ -255,8 +256,10 @@ with open(os.path.join(pathname, "course", "policies", new_run, "policy.json")) 
     data = json.load(f)
 
     # Set the root to "course/new_run"
-    data["course/" + new_run] = data["course/" + old_run]
-    del data["course/" + old_run]
+    if new_run != old_run:
+        data["course/" + new_run] = data["course/" + old_run]
+        del data["course/" + old_run]
+
     # Clear any discussion blackouts.
     data["course/" + new_run]["discussion_blackouts"] = []
     # Set the start and end dates
@@ -275,7 +278,7 @@ with open(os.path.join(pathname, "course", "policies", new_run, "policy.json")) 
     tabs = [x for x in data["course/" + new_run]["tabs"]]
     faq_search = [x for x in tabs if "FAQ" in x["name"]]
     if len(faq_search) > 0:
-        faq_filename = faq_slug[0]["url_slug"]
+        faq_filename = faq_search[0]["url_slug"]
     display_name = data["course/" + new_run]["display_name"]
 
 
