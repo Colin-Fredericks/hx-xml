@@ -34,10 +34,13 @@ Last update: March 30th 2021
 ######################
 def edxDateToPython(date_string):
     # date_string is in edx's format: 2030-01-01T00:00:00+00:00
-    # split on -, T, :, and +
+    # sometimes ends with a Z instead of +whatever
+    # split on -, T, :, Z, and +
     # Resulting list is year, month, day, 24hours, minutes,seconds, something something.
-    date_list_str = re.split("-|T|:|\+", date_string)
-    date_list = [int(x.replace('"', "").replace("'", "")) for x in date_list_str]
+    date_list_str = re.split("-|T|:|\+|Z", date_string)
+    date_list = [
+        int(x.replace('"', "").replace("'", "")) for x in date_list_str if len(x) > 0
+    ]
     return {
         "date": datetime.date(date_list[0], date_list[1], date_list[2]),
         "time": datetime.time(date_list[3], date_list[4], date_list[5]),
