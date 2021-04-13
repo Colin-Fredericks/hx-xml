@@ -32,13 +32,6 @@ Last update: March 30th 2021
 ######################
 # Utility Functions
 ######################
-def findAllChildren(node, element):
-    for item in node.findall(element):
-        yield item
-        for child in findAllChildren(item, element):
-            yield child
-
-
 def edxDateToPython(date_string):
     # date_string is in edx's format: 2030-01-01T00:00:00+00:00
     # sometimes ends with a Z instead of +whatever
@@ -159,6 +152,7 @@ def setUpDetails(args):
         "problems": {
             "total": 0,
             "ungated": 0,
+            "solutions": 0,
             "choiceresponse": 0,
             "customresponse": 0,
             "optioninput": 0,
@@ -166,6 +160,7 @@ def setUpDetails(args):
             "multiplechoiceresponse": 0,
             "stringresponse": 0,
             "formularesponse": 0,
+            "compound": 0,
         },
         "videos": {
             "num_videos": 0,
@@ -191,12 +186,13 @@ def updateDetails(new_info, category, details):
         for item in new_info:
             if level2 == item:
                 if type(details[category][level2]) == list:
-                    for element in item:
+                    for element in new_info[item]:
                         details[category][level2].append(element)
                 elif type(details[category][level2]) == int:
                     details[category][level2] += new_info[level2]
                 else:
                     details[category][level2] = new_info[level2]
+
     return details
 
 
@@ -367,6 +363,7 @@ def handlePolicies(details):
 
         # Items to handle later
         run["lti_passports"] = data[runpath].get("lti_passports", [])
+        print(run["lti_passports"])
         run["display_name"] = data[runpath]["display_name"]
 
         # Update some standard tabs
@@ -566,17 +563,9 @@ def scrapeProblems(details):
         "multiplechoiceresponse": 0,
         "stringresponse": 0,
         "formularesponse": 0,
+        "compound": 0,
     }
-    problem_type_translator = {
-        "choiceresponse": "checkbox",
-        "customresponse": "custom input",
-        "optioninput": "dropdown",
-        "numericalresponse": "numerical",
-        "multiplechoiceresponse": "multiple-choice",
-        "stringresponse": "text",
-        "formularesponse": "math formula",
-    }
-    trouble = {}
+    trouble = {"no_solution": []}
 
     # Open everything in the problem/ folder
     for dirpath, dirnames, filenames in os.walk(
@@ -593,39 +582,30 @@ def scrapeProblems(details):
                 if root.attrib["group_access"] == "{&quot;51&quot;: [1, 2]}":
                     problems["ungated"] += 1
 
+            # What type of problem is this?
+            for t in problem_types:
+                check_type = root.iter(t)
+                for c in check_type:
+                    problem_type_count[t] = problem_type_count[t] + 1
+
             # Does this problem have a non-empty solution?
-            solutions = list(findAllChildren(root, "solution"))
+            solutions = root.iter("solution")
             solution_texts = [ET.tostring(x, method="text") for x in solutions]
             non_empty_solutions = [len(x) for x in solution_texts]
             if sum(non_empty_solutions) > 0:
                 problems["solutions"] += 1
-            for T in solution_texts:
-                if len(T) == 0:
-                    trouble["no_solution"].append("problem/" + filename)
-
-            # Check for specific problem types and count them.
-            # They won't be at a reliable depth in the problem XML,
-            # So we need to dump the full problem file text to get them.
-            with open(
-                os.path.join(details["run"]["pathname"], "course", "problem", eachfile),
-                mode="r",
-            ) as p:
-                # Get the whole-file text so we can search it.
-                problem_text = p.read()
-
-                if "/discusison/forum" in problem_text:
-                    trouble["discussion_links"].append("problem/" + eachfile)
-                # TODO: Can we replace this with a ET.find() command?
-                if "<solution" in problem_text:
-                    problems["solutions"] += 1
-                # TODO: Can we replace this with a ET.find() command?
-                for t in problem_types:
-                    if t in problem_text:
-                        problem_type_count[t] = problem_type_count[t] + 1
+            else:
+                trouble["no_solution"].append("problem/" + eachfile)
 
             problems["total"] += 1
 
+    num_problem_tags = 0
+    for t in problem_type_count:
+        num_problem_tags += problem_type_count[t]
+    problem_type_count["compound"] = num_problem_tags - problems["total"]
+
     details = updateDetails(problem_type_count, "problems", details)
+    details = updateDetails(problems, "problems", details)
     details = updateDetails(trouble, "trouble", details)
     return details
 
@@ -666,6 +646,8 @@ def scrapePage(file_contents, filename, folder, details):
 
 def scrapeFolder(folder, details):
     pathname = details["run"]["pathname"]
+
+    # Get the right type of files for this particular folder.
     if folder == "html" or folder == "tabs":
         extension = ".html"
     else:
@@ -673,8 +655,8 @@ def scrapeFolder(folder, details):
     for dirpath, dirnames, filenames in os.walk(
         os.path.join(pathname, "course", folder)
     ):
-        html_files = [x for x in filenames if x[-(len(extension)) :] == extension]
-        for eachfile in html_files:
+        right_files = [x for x in filenames if x[-(len(extension)) :] == extension]
+        for eachfile in right_files:
 
             with open(
                 os.path.join(pathname, "course", folder, eachfile), mode="r"
@@ -692,6 +674,8 @@ def createSummary(details):
     run = details["run"]
     dates = details["dates"]
     videos = details["videos"]
+    trouble = details["trouble"]
+    problems = details["problems"]
     component_count = details["verticals"]["component_count"]
 
     # Create high-level summary of course as takeaway file.
@@ -718,10 +702,10 @@ def createSummary(details):
             txt += "WARNING: course ends in the past"
         txt += "Pacing: " + run["pacing"] + "\n"
         txt += "\n"
-        txt += "Number of sections: " + str(details["chapter"]["num_chapters"]) + "\n"
+        txt += "Number of sections: " + str(details["chapters"]["num_chapters"]) + "\n"
         txt += (
             "Highlights set for "
-            + str(details["chapter"]["num_highlights"])
+            + str(details["chapters"]["num_highlights"])
             + " sections"
             + "\n"
         )
@@ -758,14 +742,29 @@ def createSummary(details):
             )
 
         txt += "\n"
-        txt += "Number of problems: " + str(num_problems) + "\n"
-        txt += "Number of ungated problems: " + str(num_ungated_problems) + "\n"
+        txt += "Number of problems: " + str(problems["total"]) + "\n"
+        txt += "Ungated problems: " + str(problems["ungated"]) + "\n"
+        txt += (
+            "Problems without solutions: "
+            + str(problems["total"] - problems["solutions"])
+            + "\n"
+        )
 
         # Types of problems
+        problem_type_translator = {
+            "choiceresponse": "checkbox",
+            "customresponse": "custom input",
+            "optioninput": "dropdown",
+            "numericalresponse": "numerical",
+            "multiplechoiceresponse": "multiple-choice",
+            "stringresponse": "text",
+            "formularesponse": "math formula",
+            "compound": "compound",
+        }
         for t in problem_type_translator:
             txt += (
                 "  "
-                + spaceOut(str(problem_type_count[t]), 4, "right")
+                + spaceOut(str(problems[t]), 4, "right")
                 + " "
                 + problem_type_translator[t]
                 + " problems\n"
@@ -791,10 +790,11 @@ def createSummary(details):
 
         # Summarize LTI tools & keys
         txt += "\n"
-        if len(lti_passports) > 0:
+        print(run["lti_passports"])
+        if len(run["lti_passports"]) > 0:
             txt += "LTI tools:\n"
-            for l in lti_passports:
-                txt += lti_passports[0] + "\n"
+            for l in run["lti_passports"]:
+                txt += run["lti_passports"][0] + "\n"
         else:
             txt += "No LTI tools.\n"
 
@@ -831,7 +831,6 @@ def main():
     details = setUpDetails(args)
     details = getDates(args, details)
 
-    lti_passports = []
     faq_filename = ""
 
     details = handleBaseFiles(details)
@@ -848,7 +847,7 @@ def main():
 
     createSummary(details)
 
-    createNewTar()
+    # createNewTar()
 
 
 if __name__ == "__main__":
