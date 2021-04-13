@@ -32,8 +32,6 @@ Last update: March 30th 2021
 ######################
 # Utility Functions
 ######################
-
-
 def edxDateToPython(date_string):
     # date_string is in edx's format: 2030-01-01T00:00:00+00:00
     # sometimes ends with a Z instead of +whatever
@@ -115,174 +113,270 @@ def spaceOut(s, n, rl="left"):
     return s
 
 
-#######################
-# Main starts here
-#######################
+#########################
+# All the things we need to track
+#########################
+def setUpDetails(args):
+    details = {
+        # For all of these, if so, where?
+        "trouble": {
+            "discussion_links": [],  # Any links to the discussion boards?
+            "flash_links": [],  # Any Flash?
+            "top_tab_js": [],  # Any javascript that targets the top tabs?
+            "iframes": [],  # Any iframes?
+            "no_solution": [],  # Problems without solutions
+        },
+        "run": {
+            "old": "",
+            "new": args.run,
+            "id": "",
+            "old_start_edx": "",
+            "pacing": "instructor-paced",
+            "course_name": "",
+            "pathname": os.path.dirname(args.filename),
+            "lti_passports": [],
+            "display_name": "",
+        },
+        # TODO: replace the placeholder values below
+        "dates": {
+            "new_start_py": datetime.date.today(),
+            "new_end_py": datetime.date.today(),
+            "new_start_edx": "",
+            "new_end_edx": "",
+            "old_start_edx": "",
+            "old_end_edx": "",
+            "date_delta": "",
+        },
+        "chapters": {"num_chapters": 0, "num_highlights": 0},
+        "verticals": {"component_count": OrderedDict()},
+        "problems": {
+            "total": 0,
+            "ungated": 0,
+            "solutions": 0,
+            "choiceresponse": 0,
+            "customresponse": 0,
+            "optioninput": 0,
+            "numericalresponse": 0,
+            "multiplechoiceresponse": 0,
+            "stringresponse": 0,
+            "formularesponse": 0,
+            "compound": 0,
+        },
+        "videos": {
+            "num_videos": 0,
+            "youtube_videos": 0,
+            "num_videos": 0,
+            "num_downloadable_videos": 0,
+            "num_downloadable_transcripts": 0,
+            "lengths": [],
+            "max_length": "",
+            "median_length": "",
+            "min_length": "",
+            "total_length": "",
+        },
+    }
+    return details
 
-# Read in the filename and options
-parser = argparse.ArgumentParser(usage=instructions, add_help=False)
-parser.add_argument("filename", default="course.tar.gz")
-parser.add_argument("run", default=None)
-parser.add_argument("-h", "--help", action="store_true")
-parser.add_argument("-d", "--dates", action="store_true")
+
+# Updating the trouble or run data appropriately
+def updateDetails(new_info, category, details):
+    # "level 1" here is the category string.
+    # TODO: This was written like shit. Rewrite the whole thing.
+    for level2 in details[category]:
+        for item in new_info:
+            if level2 == item:
+                if type(details[category][level2]) == list:
+                    for element in new_info[item]:
+                        details[category][level2].append(element)
+                elif type(details[category][level2]) == int:
+                    details[category][level2] += new_info[level2]
+                else:
+                    details[category][level2] = new_info[level2]
+
+    return details
 
 
-###########################
-# TODO: Handle input from JSON file
-###########################
-# parser.add_argument("file", action="store")
+#########################
+# Command Line Args
+#########################
+def getCommandLineArgs(args):
+
+    # Read in the filename and options
+    parser = argparse.ArgumentParser(usage=instructions, add_help=False)
+    parser.add_argument("filename", default="course.tar.gz")
+    parser.add_argument("run", default=None)
+    parser.add_argument("-h", "--help", action="store_true")
+    parser.add_argument("-d", "--dates", action="store_true")
+
+    ###########################
+    # TODO: Handle input from JSON file
+    ###########################
+    # parser.add_argument("file", action="store")
+
+    args = parser.parse_args()
+    if args.help:
+        sys.exit(instructions)
+
+    if not os.path.exists(args.filename):
+        sys.exit("Filename not found: " + args.filename)
+    args.pathname = os.path.dirname(args.filename)
+
+    args.root_filename = "course/course.xml"
+
+    return args
 
 
-args = parser.parse_args()
-if args.help:
-    sys.exit(instructions)
+#########################
+# Dates
+#########################
+def getDates(args, details):
+    use_new_dates = args.dates
+    dates = details["dates"]
 
-# Prompt for start and end dates.
-use_new_dates = args.dates
+    dates["new_start_edx"] = pythonDateToEdx(
+        dates["new_start_py"], datetime.datetime.now().time()
+    )
+    dates["new_end_edx"] = pythonDateToEdx(
+        dates["new_end_py"], datetime.datetime.now().time()
+    )
 
-# TODO: replace the placeholder values below
-new_start_py = datetime.date.today()
-new_end_py = datetime.date.today()
-new_start_edx = pythonDateToEdx(new_start_py, datetime.datetime.now().time())
-new_end_edx = pythonDateToEdx(new_end_py, datetime.datetime.now().time())
+    # TODO: Allow command-line or file-driven entry of dates & times
+    if use_new_dates:
+        start_date = input("Start date (yyyy-mm-dd) = ")
+        start_time = input("Start time (24h:min:sec) = ")
+        end_date = input("End date (yyyy-mm-dd) = ")
+        end_time = input("End time (24h:min:sec) = ")
+        dates["new_start_edx"] = start_date + "T" + start_time + "Z"
+        dates["new_end_edx"] = end_date + "T" + end_time + "Z"
 
-# TODO: Allow command-line or file-driven entry of dates & times
-if use_new_dates:
-    start_date = input("Start date (yyyy-mm-dd) = ")
-    start_time = input("Start time (24h:min:sec) = ")
-    end_date = input("End date (yyyy-mm-dd) = ")
-    end_time = input("End time (24h:min:sec) = ")
-    new_start_edx = start_date + "T" + start_time + "Z"
-    new_end_edx = end_date + "T" + end_time + "Z"
+        # Are any of these in the past? Flag that.
+        dates["new_start_py"] = edxDateToPython(dates["new_start_edx"])["date"]
+        dates["new_end_py"] = edxDateToPython(dates["new_end_edx"])["date"]
 
-    # Are any of these in the past? Flag that.
-    new_start_py = edxDateToPython(new_start_edx)["date"]
-    new_end_py = edxDateToPython(new_end_edx)["date"]
+    details = updateDetails(dates, "dates", details)
+    return details
 
-starts_in_past = new_start_py < datetime.date.today()
-ends_in_past = new_end_py < datetime.date.today()
-if starts_in_past:
-    sys.exit("WARNING: Your start date is in the past.")
-if ends_in_past:
-    sys.exit("WARNING: Your end date is in the past.")
 
-if not os.path.exists(args.filename):
-    sys.exit("Filename not found: " + args.filename)
-pathname = os.path.dirname(args.filename)
+#########################
+# TODO: Update FAQ file
+#########################
+def updateFAQ(filename):
+    pass
 
-# Make a copy of the tarball for backup purposes
-shutil.copy2(args.filename, args.filename[:-7] + "_backup.tar.gz")
 
-# Extract the tarball.
-tar = tarfile.open(args.filename)
-tar.extractall(pathname)
-tar.close()
+#########################
+# TODO: Update Related Course file
+#########################
+def updateRelated(filename):
+    pass
 
-root_filename = "course/course.xml"
-root_text = ""
-
-old_run = ""
-new_run = args.run
-lti_passports = []
-faq_filename = ""
-course_name = ""
-course_pacing = ""
 
 #########################
 # Course base files
 #########################
+def handleBaseFiles(details):
+    run = details["run"]
+    pathname = run["pathname"]
+    date = details["dates"]
 
-# Change the /course.xml file to point to the new run.
-# Open to read
-with open(os.path.join(pathname, root_filename), "r") as root_file:
-    root_text = root_file.read()
+    # Open the course root file
+    root_file = os.path.join(pathname, "course", "course.xml")
+    root_tree = ET.parse(root_file)
+    root_root = root_tree.getroot()
 
-# Open to write
-# TODO: switch to xml read/write , and get course ID
-with open(os.path.join(pathname, root_filename), "w") as root_file:
-    course_match = re.search('course="(.+?)"', root_text)
-    course_id = course_match.group(1)
+    # Get course ID
+    course_id = root_root.attrib.get("course", "unknown")
+    # Change the /course.xml file to point to the new run.
+    run["old"] = root_root.attrib.get("url_name", "unknown")
+    root_root.set("url_name", run["new"])
 
-    url_match = re.search('url_name="(.+?)"', root_text)
-    old_run = url_match.group(1)
-    new_root_text = root_text.replace(old_run, new_run)
-    root_file.write(new_root_text)
+    # Close course root.
+    root_tree.write(root_file, encoding="UTF-8", xml_declaration=False)
 
-    # And save the course name for later.
-    match_object = re.search('course="(.+?)"', root_text)
-    course_name = match_object.group(1)
+    # Rename the course/course_run.xml file
+    run_file = os.path.join(pathname, "course", "course", run["old"] + ".xml")
+    new_runfile = os.path.join(pathname, "course", "course", run["new"] + ".xml")
+    os.rename(run_file, new_runfile)
 
-# Rename the course/course_run.xml file
-run_file = os.path.join(pathname, "course", "course", old_run + ".xml")
-new_runfile = os.path.join(pathname, "course", "course", new_run + ".xml")
-os.rename(run_file, new_runfile)
+    # Open the course/course_run.xml file.
+    tree = ET.parse(new_runfile)
+    root = tree.getroot()
+    # Get the old start date. We'll need it to update the ORAs later.
+    date["old_start_edx"] = root.attrib["start"]
+    # Set the start and end dates in xml attributes
+    root.set("start", date["new_start_edx"])
+    root.set("end", date["new_end_edx"])
 
-# Set the start and end dates in xml attributes on course/course_run.xml
-# Get the old start date too. We'll need it to update the ORAs later.
-run_file = os.path.join(pathname, "course", "course", new_run + ".xml")
-tree = ET.parse(run_file)
-root = tree.getroot()
-old_start_edx = root.attrib["start"]
-root.set("start", new_start_edx)
-root.set("end", new_end_edx)
+    if root.attrib["self_paced"] == "true":
+        run["pacing"] = "self-paced"
 
-# Items to track for later
-course_pacing = (
-    "self-paced" if root.attrib["self_paced"] == "true" else "instructor-paced"
-)
-# Convert old_start_date to a Python datetime object for later manipulation
-old_start_py = edxDateToPython(old_start_edx)["date"]
-date_delta = new_start_py - old_start_py
+    # Write that file, done with it.
+    tree.write(run_file, encoding="UTF-8", xml_declaration=False)
 
-# Write that file, done with it.
-tree.write(run_file, encoding="UTF-8", xml_declaration=False)
+    # Convert old_start_date to a Python datetime object for later manipulation
+    date["old_start_py"] = edxDateToPython(date["old_start_edx"])["date"]
+    date["date_delta"] = date["new_start_py"] - date["old_start_py"]
+
+    details = updateDetails(run, "run", details)
+    details = updateDetails(date, "dates", details)
+    return details
 
 
 #########################
 # Policies folder
 ##########################
+def handlePolicies(details):
+    run = details["run"]
+    dates = details["dates"]
+    pathname = run["pathname"]
+    runpath = "course/" + run["new"]
 
-# Rename the policies/course_run folder
-if new_run != old_run:
-    runfolder = os.path.join(pathname, "course", "policies", old_run)
-    newfolder = os.path.join(pathname, "course", "policies", new_run)
-    if os.path.exists(newfolder):
-        shutil.rmtree(newfolder)
-    os.rename(runfolder, newfolder)
+    # Rename the policies/course_run folder
+    if run["new"] != run["old"]:
+        runfolder = os.path.join(pathname, "course", "policies", run["old"])
+        newfolder = os.path.join(pathname, "course", "policies", run["new"])
+        if os.path.exists(newfolder):
+            shutil.rmtree(newfolder)
+            os.rename(runfolder, newfolder)
 
+    # Open policies/course_run/policy.json
+    data = dict()
+    with open(
+        os.path.join(pathname, "course", "policies", run["new"], "policy.json")
+    ) as f:
+        data = json.load(f)
 
-# TODO: Existence checks for a lot of these.
-# TODO: Blackout dates
-# Open policies/course_run/policy.json
-data = dict()
-with open(os.path.join(pathname, "course", "policies", new_run, "policy.json")) as f:
-    data = json.load(f)
+        # Set the root to "course/new_run"
+        if run["new"] != run["old"]:
+            data[runpath] = data["course/" + run["old"]]
+            del data["course/" + run["old"]]
 
-    # Set the root to "course/new_run"
-    if new_run != old_run:
-        data["course/" + new_run] = data["course/" + old_run]
-        del data["course/" + old_run]
+        # Clear any discussion blackouts.
+        data[runpath]["discussion_blackouts"] = []
+        # Set the start and end dates
+        data[runpath]["start"] = dates["new_start_edx"]
+        data[runpath]["end"] = dates["new_end_edx"]
+        # Set the xml_attributes:filename using new_run
+        data[runpath]["xml_attributes"]["filename"] = [runpath]
+        # A few other default settings
+        data[runpath]["days_early_for_beta"] = 100.0
 
-    # Clear any discussion blackouts.
-    data["course/" + new_run]["discussion_blackouts"] = []
-    # Set the start and end dates
-    data["course/" + new_run]["start"] = new_start_edx
-    data["course/" + new_run]["end"] = new_end_edx
-    # Set the xml_attributes:filename using new_run
-    data["course/" + new_run]["xml_attributes"]["filename"] = ["course/" + new_run]
-    # A few other default settings
-    data["course/" + new_run]["days_early_for_beta"] = 100.0
+        # Items to handle later
+        run["lti_passports"] = data[runpath].get("lti_passports", [])
+        print(run["lti_passports"])
+        run["display_name"] = data[runpath]["display_name"]
 
-    # TODO: Wipe all the old LTI keys and secrets.
+        # Update some standard tabs
+        tabs = [x for x in data[runpath]["tabs"]]
+        faq_search = [x for x in tabs if "FAQ" in x["name"]]
+        if len(faq_search) > 0:
+            updateFAQ(faq_search[0]["url_slug"])
+        related_search = [x for x in tabs if "Related Courses" in x["name"]]
+        if len(related_search) > 0:
+            updateRelated(related_search[0]["related_search"])
 
-    # Items to handle later
-    lti_passports = data["course/" + new_run].get("lti_passports", [])
-
-    tabs = [x for x in data["course/" + new_run]["tabs"]]
-    faq_search = [x for x in tabs if "FAQ" in x["name"]]
-    if len(faq_search) > 0:
-        faq_filename = faq_search[0]["url_slug"]
-    display_name = data["course/" + new_run]["display_name"]
+    details = updateDetails(run, "run", details)
+    return details
 
 
 ################################
@@ -293,237 +387,245 @@ with open(os.path.join(pathname, "course", "policies", new_run, "policy.json")) 
 # Update the FAQ page.
 # Pull new version of hx.js and update
 
-# Find all instances of course_run in XML and HTML files,
-# and replace them with the new one.
 
 ################################
 # Chapter scraping
 ################################
+def scrapeChapters(details):
+    # How many chapters have weekly highlights set?
+    # Open everything in the chapter/ folder
+    chapters = {"num_chapters": 0, "num_highlights": 0}
+    for dirpath, dirnames, filenames in os.walk(
+        os.path.join(details["run"]["pathname"], "course", "chapter")
+    ):
+        for eachfile in filenames:
 
-# How many chapters have weekly highlights set?
-# Open everything in the chapter/ folder
-num_highlights = 0
-num_chapters = 0
-for dirpath, dirnames, filenames in os.walk(
-    os.path.join(pathname, "course", "chapter")
-):
-    for eachfile in filenames:
+            # Get the XML for each file
+            tree = ET.parse(os.path.join(dirpath, eachfile))
+            root = tree.getroot()
 
-        # Get the XML for each file
-        tree = ET.parse(os.path.join(dirpath, eachfile))
-        root = tree.getroot()
+            # If there's a highlights attribute set, then there are highlights.
+            # If not, then no.
+            if root.attrib.get("highlights", False):
+                chapters["num_highlights"] += 1
 
-        # If there's a highlights attribute set, then there are highlights.
-        # If not, then no.
-        if root.attrib.get("highlights", False):
-            num_highlights += 1
+            chapters["num_chapters"] += 1
 
-        num_chapters += 1
+    details = updateDetails(chapters, "chapters", details)
+    return details
 
 
 ################################
 # Vertical scraping
 ################################
+def scrapeVerticals(details):
 
-# TODO: Add LTI components
+    # TODO: Add LTI components
 
-# Count the number of all the component types in the course.
-# Especially need: ORA, LTI, discussion
-component_count = {}
-# Open everything in the vertical/ folder
-for dirpath, dirnames, filenames in os.walk(
-    os.path.join(pathname, "course", "vertical")
-):
-    for eachfile in filenames:
+    # Count the number of all the component types in the course.
+    # Especially need: ORA, LTI, discussion
+    component_count = {}
+    # Open everything in the vertical/ folder
+    for dirpath, dirnames, filenames in os.walk(
+        os.path.join(details["run"]["pathname"], "course", "vertical")
+    ):
+        for eachfile in filenames:
 
-        # Get the XML for each file
-        tree = ET.parse(os.path.join(dirpath, eachfile))
-        root = tree.getroot()
+            # Get the XML for each file
+            tree = ET.parse(os.path.join(dirpath, eachfile))
+            root = tree.getroot()
 
-        # get children and count how many we have
-        for child in root:
-            if component_count.get(child.tag, False):
-                component_count[child.tag] = component_count[child.tag] + 1
-            else:
-                component_count[child.tag] = 1
+            # get children and count how many we have
+            for child in root:
+                if component_count.get(child.tag, False):
+                    component_count[child.tag] = component_count[child.tag] + 1
+                else:
+                    component_count[child.tag] = 1
 
-        ################################
-        # LTI components - don't forget old tag style
-        ################################
+            ################################
+            # LTI components - don't forget old tag style
+            ################################
 
-        ################################
-        # Open Response Assessments
-        ################################
-        # These are all inline in the verticals (hopefully)
-        for child in root:
-            if child.tag == "openassessment":
-                # If there are no child elements (sigh), dig into the url_name.
+            ################################
+            # Open Response Assessments
+            ################################
+            # These are all inline in the verticals (hopefully)
+            for child in root:
+                if child.tag == "openassessment":
+                    # If there are no child elements (sigh), dig into the url_name.
 
-                # TODO: Update ORAs to use flexible grading.
+                    # TODO: Update ORAs to use flexible grading.
 
-                # Shift deadlines for ORAs to match new start date.
-                # Sample XML:
-                # <openassessment
-                #     url_name="0dbe16d48442412d9df17b43daf32bb8"
-                #     submission_start="2001-01-01T00:00:00+00:00"
-                #     submission_due="2021-07-13T23:30:00+00:00"
-                # >
-                #   <assessments>
-                #     <assessment name="peer-assessment" must_grade="5" must_be_graded_by="3"
-                #       start="2001-01-01T00:00:00+00:00" due="2021-07-21T23:25:00+00:00"
-                #     />
-                #   </assessments>
-                # </openassessment>
-                pass
+                    # Shift deadlines for ORAs to match new start date.
+                    # Sample XML:
+                    # <openassessment
+                    #     url_name="0dbe16d48442412d9df17b43daf32bb8"
+                    #     submission_start="2001-01-01T00:00:00+00:00"
+                    #     submission_due="2021-07-13T23:30:00+00:00"
+                    # >
+                    #   <assessments>
+                    #     <assessment name="peer-assessment" must_grade="5" must_be_graded_by="3"
+                    #       start="2001-01-01T00:00:00+00:00" due="2021-07-21T23:25:00+00:00"
+                    #     />
+                    #   </assessments>
+                    # </openassessment>
+                    pass
 
-# Alphabetizing
-component_count_sorted = OrderedDict(sorted(component_count.items()))
+    # Alphabetizing
+    component_count_sorted = OrderedDict(sorted(component_count.items()))
+    verticals = {"component_count": component_count_sorted}
+
+    details = updateDetails(verticals, "verticals", details)
+    return details
+
 
 ################################
 # Video scraping
 ################################
+def scrapeVideos(details):
+    # Are any videos still pointing to YouTube?
+    # What % of videos are downloadable?
 
-# Are any videos still pointing to YouTube?
-# What % of videos are downloadable?
+    videos = {
+        "num_videos": 0,
+        "youtube_videos": 0,
+        "num_videos": 0,
+        "num_downloadable_videos": 0,
+        "num_downloadable_transcripts": 0,
+        "lengths": [],
+        "max_length": "",
+        "median_length": "",
+        "min_length": "",
+        "total_length": "",
+    }
+    # Open everything in the video/ folder
+    for dirpath, dirnames, filenames in os.walk(
+        os.path.join(details["run"]["pathname"], "course", "video")
+    ):
+        for eachfile in filenames:
 
-num_videos = 0
-youtube_videos = 0
-num_videos = 0
-num_downloadable_videos = 0
-num_downloadable_transcripts = 0
-video_lengths = []
-# Open everything in the video/ folder
-for dirpath, dirnames, filenames in os.walk(os.path.join(pathname, "course", "video")):
-    for eachfile in filenames:
+            # Get the XML for each file
+            tree = ET.parse(os.path.join(dirpath, eachfile))
+            root = tree.getroot()
 
-        # Get the XML for each file
-        tree = ET.parse(os.path.join(dirpath, eachfile))
-        root = tree.getroot()
+            if root.attrib.get("youtube_id_1_0", False):
+                if root.attrib["youtube_id_1_0"] != "":
+                    videos["youtube_videos"] += 1
+            if root.attrib.get("download_video", False):
+                if root.attrib["download_video"] == "true":
+                    videos["num_downloadable_videos"] += 1
+            if root.attrib.get("download_track", False):
+                if root.attrib["download_track"] == "true":
+                    videos["num_downloadable_transcripts"] += 1
 
-        if root.attrib.get("youtube_id_1_0", False):
-            if root.attrib["youtube_id_1_0"] != "":
-                youtube_videos += 1
-        if root.attrib.get("download_video", False):
-            if root.attrib["download_video"] == "true":
-                num_downloadable_videos += 1
-        if root.attrib.get("download_track", False):
-            if root.attrib["download_track"] == "true":
-                num_downloadable_transcripts += 1
-        if root.attrib["youtube_id_1_0"] != "":
-            youtube_videos += 1
+            # Getting video durations
+            asset_tag = root.find("video_asset")
+            if asset_tag is not None:
+                if asset_tag.attrib.get("duration", False):
+                    videos["lengths"].append(float(asset_tag.attrib["duration"]))
 
-        # Getting video durations
-        asset_tag = root.find("video_asset")
-        if asset_tag is not None:
-            if asset_tag.attrib.get("duration", False):
-                video_lengths.append(float(asset_tag.attrib["duration"]))
+            videos["num_videos"] += 1
 
-        num_videos += 1
+    if len(videos["lengths"]) > 0:
+        videos["max_length"] = secondsToHMS(max(videos["lengths"]))
+        videos["median_length"] = secondsToHMS(median(videos["lengths"]))
+        videos["min_length"] = secondsToHMS(min(videos["lengths"]))
+        videos["total_length"] = secondsToHMS(sum(videos["lengths"]))
+    else:
+        videos["total_length"] = "Unknown. Course uses old-style video tags."
 
-percent_downloadable_vid = num_downloadable_videos / num_videos
-percent_downloadable_trans = num_downloadable_transcripts / num_videos
+    details = updateDetails(videos, "videos", details)
+    return details
 
-video_max_length = ""
-video_median_length = ""
-video_min_length = ""
-video_total_length = ""
-if len(video_lengths) > 0:
-    video_max_length = secondsToHMS(max(video_lengths))
-    video_median_length = secondsToHMS(median(video_lengths))
-    video_min_length = secondsToHMS(min(video_lengths))
-    video_total_length = secondsToHMS(sum(video_lengths))
-else:
-    video_total_length = "Unknown. Course uses old-style video tags."
 
 ################################
 # Problem scraping
 ################################
+def scrapeProblems(details):
+    # Count the number of problems of each assignment type
+    # What % of content is gated?
+    problems = {"total": 0, "ungated": 0, "solutions": 0}
+    num_solutions = 0
+    problem_types = [
+        "choiceresponse",
+        "customresponse",
+        "optioninput",
+        "numericalresponse",
+        "multiplechoiceresponse",
+        "stringresponse",
+        "formularesponse",
+    ]
+    problem_type_count = {
+        "choiceresponse": 0,
+        "customresponse": 0,
+        "optioninput": 0,
+        "numericalresponse": 0,
+        "multiplechoiceresponse": 0,
+        "stringresponse": 0,
+        "formularesponse": 0,
+        "compound": 0,
+    }
+    trouble = {"no_solution": []}
 
-# Count the number of problems of each assignment type
-# What % of content is gated?
-num_problems = 0
-num_ungated_problems = 0
-num_solutions = 0
-problem_types = [
-    "choiceresponse",
-    "customresponse",
-    "optioninput",
-    "numericalresponse",
-    "multiplechoiceresponse",
-    "stringresponse",
-    "formularesponse",
-]
-problem_type_count = {
-    "choiceresponse": 0,
-    "customresponse": 0,
-    "optioninput": 0,
-    "numericalresponse": 0,
-    "multiplechoiceresponse": 0,
-    "stringresponse": 0,
-    "formularesponse": 0,
-}
-problem_type_translator = {
-    "choiceresponse": "checkbox",
-    "customresponse": "custom input",
-    "optioninput": "dropdown",
-    "numericalresponse": "numerical",
-    "multiplechoiceresponse": "multiple-choice",
-    "stringresponse": "text",
-    "formularesponse": "math formula",
-}
+    # Open everything in the problem/ folder
+    for dirpath, dirnames, filenames in os.walk(
+        os.path.join(details["run"]["pathname"], "course", "problem")
+    ):
+        for eachfile in filenames:
 
-# For all of these, if so, where?
-we_got_trouble = {
-    "discussion_links": [],  # Any links to the discussion boards?
-    "flash_links": [],  # Any Flash?
-    "top_tab_js": [],  # Any javascript that targets the top tabs?
-    "iframes": [],  # Any iframes?
-}
+            # Get the XML for each file
+            tree = ET.parse(os.path.join(dirpath, eachfile))
+            root = tree.getroot()
 
-# Open everything in the problem/ folder
-for dirpath, dirnames, filenames in os.walk(
-    os.path.join(pathname, "course", "problem")
-):
-    for eachfile in filenames:
+            # Is this problem outside the paywall?
+            if root.attrib.get("group_access", False):
+                if root.attrib["group_access"] == "{&quot;51&quot;: [1, 2]}":
+                    problems["ungated"] += 1
 
-        # Get the XML for each file
-        tree = ET.parse(os.path.join(dirpath, eachfile))
-        root = tree.getroot()
-
-        if root.attrib.get("group_access", False):
-            if root.attrib["group_access"] == "{&quot;51&quot;: [1, 2]}":
-                num_ungated_problems += 1
-
-        # Check for specific problem types and count them.
-        # They won't be at a reliable depth in the problem XML,
-        # So we need to dump the full problem file text to get them.
-        with open(os.path.join(pathname, "course", "problem", eachfile), mode="r") as p:
-            # Get the whole-file text so we can search it:
-            problem_text = p.read()
-
-            if "/discusison/forum" in problem_text:
-                we_got_trouble["discussion_links"].append("problem/" + eachfile)
+            # What type of problem is this?
             for t in problem_types:
-                if t in problem_text:
+                check_type = root.iter(t)
+                for c in check_type:
                     problem_type_count[t] = problem_type_count[t] + 1
 
-        num_problems += 1
+            # Does this problem have a non-empty solution?
+            solutions = root.iter("solution")
+            solution_texts = [ET.tostring(x, method="text") for x in solutions]
+            non_empty_solutions = [len(x) for x in solution_texts]
+            if sum(non_empty_solutions) > 0:
+                problems["solutions"] += 1
+            else:
+                trouble["no_solution"].append("problem/" + eachfile)
+
+            problems["total"] += 1
+
+    num_problem_tags = 0
+    for t in problem_type_count:
+        num_problem_tags += problem_type_count[t]
+    problem_type_count["compound"] = num_problem_tags - problems["total"]
+
+    details = updateDetails(problem_type_count, "problems", details)
+    details = updateDetails(problems, "problems", details)
+    details = updateDetails(trouble, "trouble", details)
+    return details
+
 
 ################################
 # HTML and Tab Scraping
 ################################
+def scrapePage(file_contents, filename, folder, details):
+    trouble = {}
+    run = details["run"]
 
-
-def scrapePage(file_contents, filename, folder):
     # Get the whole-file text so we can search it:
     txt = file_contents.read()
 
     if "<iframe" in txt:
-        we_got_trouble["iframes"].append(folder + "/" + filename)
+        trouble["iframes"].append(folder + "/" + filename)
     if ".swf" in txt:
-        we_got_trouble["flash_links"].append(folder + "/" + filename)
+        trouble["flash_links"].append(folder + "/" + filename)
     if "/discusison/forum" in txt:
-        we_got_trouble["discussion_links"].append(folder + "/" + filename)
+        trouble["discussion_links"].append(folder + "/" + filename)
     if (
         "$('.navbar')" in txt
         or "$('.course-tabs')" in txt
@@ -532,10 +634,20 @@ def scrapePage(file_contents, filename, folder):
         or '$(".course-tabs")' in txt
         or '$(".navbar-nav")' in txt
     ):
-        we_got_trouble["top_tab_js"].append(folder + "/" + filename)
+        trouble["top_tab_js"].append(folder + "/" + filename)
+
+    # TODO: Update static links
+    # Find all instances of course_run in XML and HTML files,
+    # and replace them with the new one.
+
+    details = updateDetails(trouble, "trouble", details)
+    return details
 
 
-def scrapeFolder(folder):
+def scrapeFolder(folder, details):
+    pathname = details["run"]["pathname"]
+
+    # Get the right type of files for this particular folder.
     if folder == "html" or folder == "tabs":
         extension = ".html"
     else:
@@ -543,18 +655,13 @@ def scrapeFolder(folder):
     for dirpath, dirnames, filenames in os.walk(
         os.path.join(pathname, "course", folder)
     ):
-        html_files = [x for x in filenames if x[-(len(extension)) :] == extension]
-        for eachfile in html_files:
+        right_files = [x for x in filenames if x[-(len(extension)) :] == extension]
+        for eachfile in right_files:
 
             with open(
                 os.path.join(pathname, "course", folder, eachfile), mode="r"
             ) as file_contents:
-                scrapePage(file_contents, eachfile, folder)
-
-
-scrapeFolder("html")
-scrapeFolder("tabs")
-scrapeFolder("problem")
+                return scrapePage(file_contents, eachfile, folder, details)
 
 
 # TODO: Re-tar
@@ -563,113 +670,185 @@ scrapeFolder("problem")
 ################################
 # High-level summary
 ################################
+def createSummary(details):
+    run = details["run"]
+    dates = details["dates"]
+    videos = details["videos"]
+    trouble = details["trouble"]
+    problems = details["problems"]
+    component_count = details["verticals"]["component_count"]
 
-# Create high-level summary of course as takeaway file.
-summary_file = os.path.join(pathname, course_name + "_" + new_run + ".txt")
-if os.path.exists(summary_file):
-    os.remove(summary_file)
-with open(os.path.join(pathname, course_name + "_" + new_run + ".txt"), "a") as summary:
-    txt = ""
-    txt += "Course Summary\n"
-    txt += "--------------\n"
-    txt += "\n"
-    txt += "Course name: " + display_name + "\n"
-    txt += "Identifier: " + course_id + " " + new_run + "\n"
-    txt += "New Start: " + new_start_edx + "\n"
-    if starts_in_past:
-        print("WARNING: course starts in the past")
-    txt += "New End: " + new_end_edx + "\n"
-    if ends_in_past:
-        print("WARNING: course ends in the past")
-    txt += "Pacing: " + course_pacing + "\n"
-    txt += "\n"
-    txt += "Number of sections: " + str(num_chapters) + "\n"
-    txt += "Highlights set for " + str(num_highlights) + " sections" + "\n"
-    txt += "\n"
-    txt += "Video statistics:\n"
-    txt += "  Number of videos: " + str(num_videos) + "\n"
-    txt += "  Downloadable videos: " + str(num_downloadable_videos) + "\n"
-    txt += "  Downloadable transcripts: " + str(num_downloadable_transcripts) + "\n"
-    txt += "  Total duration: " + video_total_length + "\n"
-    txt += (
-        "  Max: "
-        + video_max_length
-        + "  Median: "
-        + video_median_length
-        + "  Min: "
-        + video_min_length
-        + "\n"
+    # Create high-level summary of course as takeaway file.
+    summary_file = os.path.join(
+        run["pathname"], run["course_name"] + "_" + run["new"] + ".txt"
     )
-    txt += "\n"
-    txt += "Component Count:\n"
-
-    # Types of problems
-    for c in component_count_sorted:
+    if os.path.exists(summary_file):
+        os.remove(summary_file)
+    with open(
+        os.path.join(run["pathname"], run["course_name"] + "_" + run["new"] + ".txt"),
+        "a",
+    ) as summary:
+        txt = ""
+        txt += "Course Summary\n"
+        txt += "--------------\n"
+        txt += "\n"
+        txt += "Course name: " + run["display_name"] + "\n"
+        txt += "Identifier: " + run["id"] + " " + run["new"] + "\n"
+        txt += "New Start: " + dates["new_start_edx"] + "\n"
+        if dates["new_start_py"] < datetime.date.today():
+            txt += "WARNING: course starts in the past"
+        txt += "New End: " + dates["new_end_edx"] + "\n"
+        if dates["new_end_py"] < datetime.date.today():
+            txt += "WARNING: course ends in the past"
+        txt += "Pacing: " + run["pacing"] + "\n"
+        txt += "\n"
+        txt += "Number of sections: " + str(details["chapters"]["num_chapters"]) + "\n"
         txt += (
-            "  "
-            + spaceOut(str(component_count_sorted[c]), 4, "right")
-            + " "
-            + c
-            + " components\n"
+            "Highlights set for "
+            + str(details["chapters"]["num_highlights"])
+            + " sections"
+            + "\n"
+        )
+        txt += "\n"
+        txt += "Video statistics:\n"
+        txt += "  Number of videos: " + str(videos["num_videos"]) + "\n"
+        txt += "  Downloadable videos: " + str(videos["num_downloadable_videos"]) + "\n"
+        txt += (
+            "  Downloadable transcripts: "
+            + str(videos["num_downloadable_transcripts"])
+            + "\n"
+        )
+        txt += "  Total duration: " + videos["total_length"] + "\n"
+        txt += (
+            "  Max: "
+            + videos["max_length"]
+            + "  Median: "
+            + videos["median_length"]
+            + "  Min: "
+            + videos["min_length"]
+            + "\n"
+        )
+        txt += "\n"
+        txt += "Component Count:\n"
+
+        # Types of problems
+        for c in component_count:
+            txt += (
+                "  "
+                + spaceOut(str(component_count[c]), 4, "right")
+                + " "
+                + c
+                + " components\n"
+            )
+
+        txt += "\n"
+        txt += "Number of problems: " + str(problems["total"]) + "\n"
+        txt += "Ungated problems: " + str(problems["ungated"]) + "\n"
+        txt += (
+            "Problems without solutions: "
+            + str(problems["total"] - problems["solutions"])
+            + "\n"
         )
 
-    txt += "\n"
-    txt += "Number of problems: " + str(num_problems) + "\n"
-    txt += "Number of ungated problems: " + str(num_problems) + "\n"
+        # Types of problems
+        problem_type_translator = {
+            "choiceresponse": "checkbox",
+            "customresponse": "custom input",
+            "optioninput": "dropdown",
+            "numericalresponse": "numerical",
+            "multiplechoiceresponse": "multiple-choice",
+            "stringresponse": "text",
+            "formularesponse": "math formula",
+            "compound": "compound",
+        }
+        for t in problem_type_translator:
+            txt += (
+                "  "
+                + spaceOut(str(problems[t]), 4, "right")
+                + " "
+                + problem_type_translator[t]
+                + " problems\n"
+            )
 
-    # Types of problems
-    for t in problem_type_translator:
-        txt += (
-            "  "
-            + spaceOut(str(problem_type_count[t]), 4, "right")
-            + " "
-            + problem_type_translator[t]
-            + " problems\n"
-        )
+        # Trouble section
+        txt += "\n"
+        for troub in trouble:
+            if len(trouble[troub]) > 0:
+                if troub == "no_solution":
+                    txt += "Problems without solutions:\n"
+                if troub == "discussion_links":
+                    txt += "Direct links to discussion boards:\n"
+                elif troub == "flash_links":
+                    txt += "Links to Flash files (.swf):\n"
+                elif troub == "top_tab_js":
+                    txt += "Javascript trying to access the top tab bar:\n"
+                elif troub == "iframes":
+                    txt += "Components with iframes:\n"
 
-    # Trouble section
-    txt += "\n"
-    for troub in we_got_trouble:
-        if len(we_got_trouble[troub]) > 0:
-            if troub == "discussion_links":
-                txt += "Direct links to discussion boards:\n"
-            elif troub == "flash_links":
-                txt += "Links to Flash files (.swf):\n"
-            elif troub == "top_tab_js":
-                txt += "Javascript trying to access the top tab bar:\n"
-            elif troub == "iframes":
-                txt += "Components with iframes:\n"
+                for l in trouble[troub]:
+                    txt += str(l) + "\n"
 
-            for l in we_got_trouble[troub]:
-                txt += str(l) + "\n"
+        # Summarize LTI tools & keys
+        txt += "\n"
+        print(run["lti_passports"])
+        if len(run["lti_passports"]) > 0:
+            txt += "LTI tools:\n"
+            for l in run["lti_passports"]:
+                txt += run["lti_passports"][0] + "\n"
+        else:
+            txt += "No LTI tools.\n"
 
-    # Summarize LTI tools & keys
-    txt += "\n"
-    if len(lti_passports) > 0:
-        txt += "LTI tools:\n"
-        for l in lti_passports:
-            txt += lti_passports[0] + "\n"
-    else:
-        txt += "No LTI tools.\n"
+        txt += "\n"
+        txt += "Discussion blackout dates removed."
 
-    # General maintenance items
-    # Number of ORA ("openassessment" tag)
-    # How many discussion components are there? ("discussion" tag)
+        # General maintenance items
+        # Number of ORA ("openassessment" tag)
+        # How many discussion components are there? ("discussion" tag)
 
-    print(txt)
-    summary.write(txt)
+        print(txt)
+        summary.write(txt)
 
-# Anything else?
+    # Anything else?
 
-# Post or e-mail this somewhere so we keep a record.
+    # Post or e-mail this somewhere so we keep a record.
 
-#########################
-# Restructure to suck less
-#########################
-"""
+
+#######################
+# Main starts here
+#######################
 def main():
-    pass
+
+    args = getCommandLineArgs(sys.argv)
+
+    # Make a copy of the tarball for backup purposes
+    shutil.copy2(args.filename, args.filename[:-7] + "_backup.tar.gz")
+
+    # Extract the tarball.
+    tar = tarfile.open(args.filename)
+    tar.extractall(args.pathname)
+    tar.close()
+
+    details = setUpDetails(args)
+    details = getDates(args, details)
+
+    faq_filename = ""
+
+    details = handleBaseFiles(details)
+    details = handlePolicies(details)
+
+    details = scrapeChapters(details)
+    details = scrapeVerticals(details)
+
+    details = scrapeFolder("html", details)
+    details = scrapeFolder("tabs", details)
+    details = scrapeFolder("problem", details)
+    details = scrapeProblems(details)
+    details = scrapeVideos(details)
+
+    createSummary(details)
+
+    # createNewTar()
+
 
 if __name__ == "__main__":
     main()
-"""
