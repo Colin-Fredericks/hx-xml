@@ -136,6 +136,8 @@ def setUpDetails(args):
             "pathname": os.path.dirname(args.filename),
             "lti_passports": [],
             "display_name": "",
+            "faq_page": "",
+            "related_courses_page": "",
         },
         # Note the placeholder values: Course starts today, ends a year from today.
         "dates": {
@@ -178,7 +180,10 @@ def setUpDetails(args):
     return details
 
 
-# Updating the trouble or run data appropriately
+#########################
+# Updating the details object
+# We append to lists, add to integers, and replace everything else.
+#########################
 def updateDetails(new_info, category, details):
     # "level 1" here is the category string.
     for level2 in details[category]:
@@ -260,6 +265,11 @@ def getDates(args, details):
 # TODO: Update FAQ file
 #########################
 def updateFAQ(filename):
+    # Open the old FAQ file
+    # Wipe the content
+    # Add iframe pointing to the VPail-stored FAQ file
+    # Add "if you can't see the iframe" link.
+    # Save the file.
     pass
 
 
@@ -267,6 +277,11 @@ def updateFAQ(filename):
 # TODO: Update Related Course file
 #########################
 def updateRelated(filename):
+    # Open the old Related Courses file
+    # Wipe the content
+    # Add iframe pointing to the VPail-stored FAQ file
+    # Add "if you can't see the iframe" link.
+    # Save the file.
     pass
 
 
@@ -370,9 +385,13 @@ def handlePolicies(details):
         faq_search = [x for x in tabs if "FAQ" in x["name"]]
         if len(faq_search) > 0:
             updateFAQ(faq_search[0]["url_slug"])
+        else:
+            run["faq_page"] = "Couldn't find"
         related_search = [x for x in tabs if "Related Courses" in x["name"]]
         if len(related_search) > 0:
             updateRelated(related_search[0]["related_search"])
+        else:
+            run["related_courses_page"] = "Couldn't find"
 
     details = updateDetails(run, "run", details)
     return details
@@ -783,6 +802,16 @@ def createSummary(details):
 
                 for l in trouble[troub]:
                     txt += str(l) + "\n"
+
+        txt += "\n"
+        if run["related_courses_page"] == "":
+            txt += "Replaced Related Courses page."
+        else:
+            txt += "Could not find Related Courses page."
+        if run["faq_page"] == "":
+            txt += "Replaced FAQ page."
+        else:
+            txt += "Could not find FAQ page."
 
         # Summarize LTI tools & keys
         txt += "\n"
