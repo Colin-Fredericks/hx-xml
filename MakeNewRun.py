@@ -132,7 +132,7 @@ def setUpDetails(args):
             "id": "",
             "old_start_edx": "",
             "pacing": "instructor-paced",
-            "course_name": "",
+            "course_nickname": "",
             "pathname": os.path.dirname(args.filename),
             "lti_passports": [],
             "display_name": "",
@@ -192,6 +192,7 @@ def updateDetails(new_info, category, details):
                 if type(details[category][level2]) == list:
                     for element in new_info[item]:
                         details[category][level2].append(element)
+                        details[category][level2] = list(set(details[category][level2]))
                 elif type(details[category][level2]) == int:
                     details[category][level2] += new_info[level2]
                 else:
@@ -270,6 +271,15 @@ def updateFAQ(filename):
     # Add iframe pointing to the VPail-stored FAQ file
     # Add "if you can't see the iframe" link.
     # Save the file.
+
+    """
+    <p>Please find a list of HarvardX's most commonly asked questions below. You will need to scroll to see the whole list.</p>
+
+    <iframe title="Frequently Asked Questions" style="width:100%; height:800px; overflow-y:scroll;" src="https://stage.static.vpal.harvard.edu/cdn/universal/faq.html">
+    </iframe>
+
+    <p>If you can't see the question list above, click this link to <a href="https://stage.static.vpal.harvard.edu/cdn/universal/faq.html" target="_blank">open the FAQ in a new window</a>.</p>
+    """
     pass
 
 
@@ -302,6 +312,7 @@ def handleBaseFiles(details):
     course_id = root_root.attrib.get("course", "unknown")
     # Change the /course.xml file to point to the new run.
     run["old"] = root_root.attrib.get("url_name", "unknown")
+    run["course_nickname"] = root_root.attrib.get("course", "unknown")
     root_root.set("url_name", run["new"])
 
     # Close course root.
@@ -347,22 +358,25 @@ def handlePolicies(details):
 
     # Rename the policies/course_run folder
     if run["new"] != run["old"]:
-        runfolder = os.path.join(pathname, "course", "policies", run["old"])
+        oldfolder = os.path.join(pathname, "course", "policies", run["old"])
         newfolder = os.path.join(pathname, "course", "policies", run["new"])
         if os.path.exists(newfolder):
             shutil.rmtree(newfolder)
-            os.rename(runfolder, newfolder)
+        if os.path.exists(oldfolder):
+            os.rename(oldfolder, newfolder)
+        else:
+            sys.exit("Cannot find policies/" + run["old"] + " folder.")
 
     # Open policies/course_run/policy.json
     data = dict()
     with open(
         os.path.join(pathname, "course", "policies", run["new"], "policy.json")
-    ) as f:
-        data = json.load(f)
+    ) as policy_file:
+        data = json.load(policy_file)
 
         # Set the root to "course/new_run"
         if run["new"] != run["old"]:
-            data[runpath] = data["course/" + run["old"]]
+            data["course/" + run["new"]] = data["course/" + run["old"]]
             del data["course/" + run["old"]]
 
         # Clear any discussion blackouts.
@@ -371,7 +385,7 @@ def handlePolicies(details):
         data[runpath]["start"] = dates["new_start_edx"]
         data[runpath]["end"] = dates["new_end_edx"]
         # Set the xml_attributes:filename using new_run
-        data[runpath]["xml_attributes"]["filename"] = [runpath]
+        data[runpath]["filename"] = runpath
         # A few other default settings
         data[runpath]["days_early_for_beta"] = 100.0
 
@@ -392,6 +406,11 @@ def handlePolicies(details):
             updateRelated(related_search[0]["related_search"])
         else:
             run["related_courses_page"] = "Couldn't find"
+
+    with open(
+        os.path.join(pathname, "course", "policies", run["new"], "policy.json"), "w"
+    ) as policy_file:
+        policy_file.write(json.dumps(data, indent=4))
 
     details = updateDetails(run, "run", details)
     return details
@@ -695,12 +714,12 @@ def createSummary(details):
 
     # Create high-level summary of course as takeaway file.
     summary_file = os.path.join(
-        run["pathname"], run["course_name"] + "_" + run["new"] + ".txt"
+        run["pathname"], run["course_nickname"] + "_" + run["new"] + ".txt"
     )
     if os.path.exists(summary_file):
         os.remove(summary_file)
     with open(
-        os.path.join(run["pathname"], run["course_name"] + "_" + run["new"] + ".txt"),
+        os.path.join(summary_file),
         "a",
     ) as summary:
         txt = ""
@@ -805,13 +824,13 @@ def createSummary(details):
 
         txt += "\n"
         if run["related_courses_page"] == "":
-            txt += "Replaced Related Courses page."
+            txt += "Replaced Related Courses page.\n"
         else:
-            txt += "Could not find Related Courses page."
+            txt += "Could not find Related Courses page.\n"
         if run["faq_page"] == "":
-            txt += "Replaced FAQ page."
+            txt += "Replaced FAQ page.\n"
         else:
-            txt += "Could not find FAQ page."
+            txt += "Could not find FAQ page.\n"
 
         # Summarize LTI tools & keys
         txt += "\n"
@@ -827,8 +846,8 @@ def createSummary(details):
         txt += "Discussion blackout dates removed."
 
         # General maintenance items
-        # Number of ORA ("openassessment" tag)
-        # How many discussion components are there? ("discussion" tag)
+        # TODO: Number of ORA ("openassessment" tag)
+        # TODO: How many discussion components are there? ("discussion" tag)
 
         print(txt)
         summary.write(txt)
