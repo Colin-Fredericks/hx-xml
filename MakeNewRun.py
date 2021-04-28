@@ -685,12 +685,14 @@ def scrapePage(file_contents, filename, folder, details):
     ):
         trouble["top_tab_js"].append(folder + "/" + filename)
 
-    # TODO: Update static links and write file.
     # Find all instances of course_run in links in XML and HTML files,
-    # and replace them with the new one.
+    # and replace them with the new one. Only write file if it changed.
+    txt_runfix = txt.replace(run["old"], run["new"])
+    if txt_runfix == txt:
+        txt_runfix = False
 
     details = updateDetails(trouble, "trouble", details)
-    return details
+    return details, txt
 
 
 def scrapeFolder(folder, details):
@@ -710,7 +712,10 @@ def scrapeFolder(folder, details):
             with open(
                 os.path.join(pathname, "course", folder, eachfile), mode="r"
             ) as file_contents:
-                return scrapePage(file_contents, eachfile, folder, details)
+                det, txt = scrapePage(file_contents, eachfile, folder, details)
+                if txt != False:
+                    file_contents.write(txt)
+                return det
 
 
 ################################
