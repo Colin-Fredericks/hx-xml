@@ -315,7 +315,7 @@ def handleBaseFiles(details):
     run["course_nickname"] = root_root.attrib.get("course", "unknown")
     root_root.set("url_name", run["new"])
 
-    # Close course root.
+    # Close and write course root.
     root_tree.write(root_file, encoding="UTF-8", xml_declaration=False)
 
     # Rename the course/course_run.xml file
@@ -452,12 +452,43 @@ def scrapeChapters(details):
     return details
 
 
+def updateORA(child, tree, dirpath, eachfile, details):
+    # TODO: If there are no child elements (sigh), dig into the url_name.
+
+    # Use rich text editor. It has fewer input sanitization issues.
+    child.attrib["text_response_editor"] = "tinymce"
+
+    # Shift deadlines for ORAs to match new start date.
+    course_start = details["dates"]["new_start_edx"]
+    course_end = details["dates"]["new_end_edx"]
+    submission_end = pythonDateToEdx(
+        details["dates"]["new_end_py"] - datetime.timedelta(7),
+        datetime.time(0),
+    )
+
+    # Submissions start at course start and are due a week before course end.
+    child.attrib["submission_start"] = course_start
+    child.attrib["submission_due"] = submission_end
+
+    # Reviews start at course start and are due at course end.
+    # Look for <assessment name="peer-assessment" ...>
+    # Assume there's only one peer-assessment tag.
+    peer_grading = child.findall(".//assessment[@name='peer-assessment']")
+    peer_grading[0].attrib["start"] = course_start
+    peer_grading[0].attrib["due"] = course_end
+
+    # If we made changes, close and write file.
+    tree.write(
+        os.path.join(dirpath, eachfile),
+        encoding="UTF-8",
+        xml_declaration=False,
+    )
+
+
 ################################
 # Vertical scraping
 ################################
 def scrapeVerticals(details):
-
-    # TODO: Add LTI components
 
     # Count the number of all the component types in the course.
     # Especially need: ORA, LTI, discussion
@@ -479,34 +510,15 @@ def scrapeVerticals(details):
                 else:
                     component_count[child.tag] = 1
 
-            ################################
-            # LTI components - don't forget old tag style
-            ################################
+                ################################
+                # TODO: LTI components - don't forget old tag style
+                ################################
 
-            ################################
-            # Open Response Assessments
-            ################################
-            # These are all inline in the verticals (hopefully)
-            for child in root:
+                ################################
+                # Open Response Assessments
+                ################################
                 if child.tag == "openassessment":
-                    # If there are no child elements (sigh), dig into the url_name.
-
-                    # TODO: Update ORAs to use flexible grading.
-
-                    # Shift deadlines for ORAs to match new start date.
-                    # Sample XML:
-                    # <openassessment
-                    #     url_name="0dbe16d48442412d9df17b43daf32bb8"
-                    #     submission_start="2001-01-01T00:00:00+00:00"
-                    #     submission_due="2021-07-13T23:30:00+00:00"
-                    # >
-                    #   <assessments>
-                    #     <assessment name="peer-assessment" must_grade="5" must_be_graded_by="3"
-                    #       start="2001-01-01T00:00:00+00:00" due="2021-07-21T23:25:00+00:00"
-                    #     />
-                    #   </assessments>
-                    # </openassessment>
-                    pass
+                    updateORA(child, tree, dirpath, eachfile, details)
 
     # Alphabetizing
     component_count_sorted = OrderedDict(sorted(component_count.items()))
