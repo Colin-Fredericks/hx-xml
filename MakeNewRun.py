@@ -452,6 +452,9 @@ def scrapeChapters(details):
     return details
 
 
+################################
+# Open Response Assessments
+################################
 def updateORA(child, tree, dirpath, eachfile, details):
     # TODO: If there are no child elements (sigh), dig into the url_name.
 
@@ -514,9 +517,6 @@ def scrapeVerticals(details):
                 # TODO: LTI components - don't forget old tag style
                 ################################
 
-                ################################
-                # Open Response Assessments
-                ################################
                 if child.tag == "openassessment":
                     updateORA(child, tree, dirpath, eachfile, details)
 
@@ -685,8 +685,8 @@ def scrapePage(file_contents, filename, folder, details):
     ):
         trouble["top_tab_js"].append(folder + "/" + filename)
 
-    # TODO: Update static links
-    # Find all instances of course_run in XML and HTML files,
+    # TODO: Update static links and write file.
+    # Find all instances of course_run in links in XML and HTML files,
     # and replace them with the new one.
 
     details = updateDetails(trouble, "trouble", details)
@@ -726,7 +726,8 @@ def createSummary(details):
 
     # Create high-level summary of course as takeaway file.
     summary_file = os.path.join(
-        run["pathname"], run["course_nickname"] + "_" + run["new"] + ".txt"
+        run["pathname"],
+        run["course_nickname"] + " " + run["old"] + " to " + run["new"] + ".txt",
     )
     if os.path.exists(summary_file):
         os.remove(summary_file)
@@ -857,10 +858,6 @@ def createSummary(details):
         txt += "\n"
         txt += "Discussion blackout dates removed."
 
-        # General maintenance items
-        # TODO: Number of ORA ("openassessment" tag)
-        # TODO: How many discussion components are there? ("discussion" tag)
-
         print(txt)
         summary.write(txt)
 
@@ -903,8 +900,19 @@ def main():
 
     createSummary(details)
 
-    # TODO: re-tar
-    # createNewTar()
+    # Re-tar
+    print("Creating tar.gz file...")
+    with tarfile.open(
+        details["run"]["course_nickname"] + "_" + details["run"]["new"] + ".tar.gz",
+        "w:gz",
+    ) as tar:
+        tar.add(
+            os.path.join(details["run"]["pathname"], "course"),
+            arcname=os.path.basename(
+                os.path.join(details["run"]["pathname"], "course")
+            ),
+        )
+    print("Done.")
 
 
 if __name__ == "__main__":
