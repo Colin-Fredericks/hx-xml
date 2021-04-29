@@ -263,14 +263,9 @@ def getDates(args, details):
 
 
 #########################
-# TODO: Update FAQ file
+# Update FAQ file
 #########################
 def updateFAQ(filename):
-    # Open the old FAQ file
-    # Wipe the content
-    # Add iframe pointing to the VPail-stored FAQ file
-    # Add "if you can't see the iframe" link.
-    # Save the file.
 
     faq_text = """
 <p>Please find a list of HarvardX's most commonly asked questions below. You will need to scroll to see the whole list.</p>
@@ -281,7 +276,9 @@ def updateFAQ(filename):
 <p>If you can't see the question list above, click this link to <a href="https://stage.static.vpal.harvard.edu/cdn/universal/faq.html" target="_blank">open the FAQ in a new window</a>.</p>
 """
 
-    pass
+    # Open the old FAQ file
+    with open(filename, "w") as faq_file:
+        faq_file.write(faq_text)
 
 
 #########################
@@ -399,7 +396,15 @@ def handlePolicies(details):
         tabs = [x for x in data[runpath]["tabs"]]
         faq_search = [x for x in tabs if "FAQ" in x["name"]]
         if len(faq_search) > 0:
-            updateFAQ(faq_search[0]["url_slug"])
+            updateFAQ(
+                os.path.join(
+                    pathname,
+                    "course",
+                    "tas",
+                    run["new"],
+                    faq_search[0]["url_slug"] + ".html",
+                )
+            )
         else:
             run["faq_page"] = "Couldn't find"
         related_search = [x for x in tabs if "Related Courses" in x["name"]]
