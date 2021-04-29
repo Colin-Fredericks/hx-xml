@@ -460,6 +460,7 @@ def scrapeChapters(details):
 
 ################################
 # Open Response Assessments
+# Shift deadlines and upgrade editor type
 ################################
 def updateORA(child, tree, dirpath, eachfile, details):
     # TODO: If there are no child elements (sigh), dig into the url_name.
@@ -518,10 +519,6 @@ def scrapeVerticals(details):
                     component_count[child.tag] = component_count[child.tag] + 1
                 else:
                     component_count[child.tag] = 1
-
-                ################################
-                # TODO: LTI components - don't forget old tag style
-                ################################
 
                 if child.tag == "openassessment":
                     updateORA(child, tree, dirpath, eachfile, details)
