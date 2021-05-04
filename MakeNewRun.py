@@ -25,7 +25,7 @@ Options:
   -d  Prompt for new dates for start/end of course.
   -h  Print this help message and exit.
 
-Last update: March 30th 2021
+Last update: May 4th 2021
 """
 
 
@@ -286,9 +286,7 @@ def updateFAQ(filename):
 #########################
 def updateRelated(filename):
     # Open the old Related Courses file
-    # Wipe the content
-    # Add iframe pointing to the VPail-stored FAQ file
-    # Add "if you can't see the iframe" link.
+    # Fix the edX search links if needed
     # Save the file.
     pass
 
@@ -420,15 +418,6 @@ def handlePolicies(details):
 
     details = updateDetails(run, "run", details)
     return details
-
-
-################################
-# Boilerplate Updates
-################################
-
-# Update "Related Courses" page to use new edX search terms.
-# Update the FAQ page.
-# Pull new version of hx.js and update
 
 
 ################################
@@ -629,6 +618,8 @@ def scrapeProblems(details):
             tree = ET.parse(os.path.join(dirpath, eachfile))
             root = tree.getroot()
 
+            # TODO: Update hx.js to use the VPail.
+
             # Is this problem outside the paywall?
             if root.attrib.get("group_access", False):
                 if root.attrib["group_access"] == "{&quot;51&quot;: [1, 2]}":
@@ -668,6 +659,8 @@ def scrapeProblems(details):
 def scrapePage(file_contents, filename, folder, details):
     trouble = {}
     run = details["run"]
+
+    # TODO: Update hx.js to use the VPail.
 
     # Get the whole-file text so we can search it:
     txt = file_contents.read()
