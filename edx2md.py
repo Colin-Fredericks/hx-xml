@@ -8,9 +8,6 @@ import argparse
 import glob
 from markdownify import markdownify
 
-# Probably going to use this later to grab some specific attributes, like alt text.
-# from bs4 import BeautifulSoup
-
 instructions = """
 To use:
 python3 edx2md.py path/to/html/folder (options)
