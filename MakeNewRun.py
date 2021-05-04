@@ -202,67 +202,6 @@ def updateDetails(new_info, category, details):
 
 
 #########################
-# Command Line Args
-#########################
-def getCommandLineArgs(args):
-
-    # Read in the filename and options
-    parser = argparse.ArgumentParser(usage=instructions, add_help=False)
-    parser.add_argument("filename", default="course.tar.gz")
-    parser.add_argument("run", default=None)
-    parser.add_argument("-h", "--help", action="store_true")
-    parser.add_argument("-d", "--dates", action="store_true")
-
-    ###########################
-    # TODO: Handle input from JSON file
-    # Including dates and times
-    ###########################
-    # parser.add_argument("file", action="store")
-
-    args = parser.parse_args()
-    if args.help:
-        sys.exit(instructions)
-
-    if not os.path.exists(args.filename):
-        sys.exit("Filename not found: " + args.filename)
-    args.pathname = os.path.dirname(args.filename)
-
-    args.root_filename = "course/course.xml"
-
-    return args
-
-
-#########################
-# Dates
-#########################
-def getDates(args, details):
-    use_new_dates = args.dates
-    dates = details["dates"]
-
-    dates["new_start_edx"] = pythonDateToEdx(
-        dates["new_start_py"], datetime.datetime.now().time()
-    )
-    dates["new_end_edx"] = pythonDateToEdx(
-        dates["new_end_py"], datetime.datetime.now().time()
-    )
-
-    if use_new_dates:
-        start_date = input("Start date (yyyy-mm-dd) = ")
-        start_time = input("Start time (24h:min:sec) = ")
-        end_date = input("End date (yyyy-mm-dd) = ")
-        end_time = input("End time (24h:min:sec) = ")
-        dates["new_start_edx"] = start_date + "T" + start_time + "Z"
-        dates["new_end_edx"] = end_date + "T" + end_time + "Z"
-
-        # Are any of these in the past? Flag that.
-        dates["new_start_py"] = edxDateToPython(dates["new_start_edx"])["date"]
-        dates["new_end_py"] = edxDateToPython(dates["new_end_edx"])["date"]
-
-    details = updateDetails(dates, "dates", details)
-    return details
-
-
-#########################
 # Update FAQ file
 #########################
 def updateFAQ(filename):
@@ -867,6 +806,67 @@ def createSummary(details):
     # Post or e-mail this somewhere so we keep a record.
 
 
+#########################
+# Get dates from user input
+#########################
+def getDates(args, details):
+    use_new_dates = args.dates
+    dates = details["dates"]
+
+    dates["new_start_edx"] = pythonDateToEdx(
+        dates["new_start_py"], datetime.datetime.now().time()
+    )
+    dates["new_end_edx"] = pythonDateToEdx(
+        dates["new_end_py"], datetime.datetime.now().time()
+    )
+
+    if use_new_dates:
+        start_date = input("Start date (yyyy-mm-dd) = ")
+        start_time = input("Start time (24h:min:sec) = ")
+        end_date = input("End date (yyyy-mm-dd) = ")
+        end_time = input("End time (24h:min:sec) = ")
+        dates["new_start_edx"] = start_date + "T" + start_time + "Z"
+        dates["new_end_edx"] = end_date + "T" + end_time + "Z"
+
+        # Are any of these in the past? Flag that.
+        dates["new_start_py"] = edxDateToPython(dates["new_start_edx"])["date"]
+        dates["new_end_py"] = edxDateToPython(dates["new_end_edx"])["date"]
+
+    details = updateDetails(dates, "dates", details)
+    return details
+
+
+#########################
+# Command Line Args
+#########################
+def getCommandLineArgs(args):
+
+    # Read in the filename and options
+    parser = argparse.ArgumentParser(usage=instructions, add_help=False)
+    parser.add_argument("filename", default="course.tar.gz")
+    parser.add_argument("run", default=None)
+    parser.add_argument("-h", "--help", action="store_true")
+    parser.add_argument("-d", "--dates", action="store_true")
+
+    ###########################
+    # TODO: Handle input from a JSON file
+    # Including dates and times
+    ###########################
+    # parser.add_argument("file", action="store")
+
+    args = parser.parse_args()
+    if args.help:
+        sys.exit(instructions)
+
+    if not os.path.exists(args.filename):
+        sys.exit("Filename not found: " + args.filename)
+    args.pathname = os.path.dirname(args.filename)
+
+    args.root_filename = "course/course.xml"
+
+    return args
+
+
 #######################
 # Main starts here
 #######################
@@ -902,7 +902,7 @@ def main():
     createSummary(details)
 
     # Re-tar
-    print("Creating tar.gz file...")
+    print("Creating tar.gz file... ")
     with tarfile.open(
         details["run"]["course_nickname"] + "_" + details["run"]["new"] + ".tar.gz",
         "w:gz",
