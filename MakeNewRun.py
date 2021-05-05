@@ -557,8 +557,6 @@ def scrapeProblems(details):
             tree = ET.parse(os.path.join(dirpath, eachfile))
             root = tree.getroot()
 
-            # TODO: Update hx.js to use the VPail.
-
             # Is this problem outside the paywall?
             if root.attrib.get("group_access", False):
                 if root.attrib["group_access"] == "{&quot;51&quot;: [1, 2]}":
@@ -598,8 +596,6 @@ def scrapeProblems(details):
 def scrapePage(file_contents, filename, folder, details):
     trouble = {}
     run = details["run"]
-
-    # TODO: Update hx.js to use the VPail.
 
     # Get the whole-file text so we can search it:
     txt = file_contents.read()
