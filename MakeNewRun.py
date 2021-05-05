@@ -648,6 +648,10 @@ def scrapeFolder(folder, details):
                 os.path.join(pathname, "course", folder, eachfile), mode="r"
             ) as file_contents:
                 det, txt = scrapePage(file_contents, eachfile, folder, details)
+
+            with open(
+                os.path.join(pathname, "course", folder, eachfile), mode="w"
+            ) as file_contents:
                 if txt != False:
                     file_contents.write(txt)
                 return det
