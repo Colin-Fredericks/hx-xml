@@ -623,7 +623,7 @@ def scrapePage(file_contents, filename, folder, details):
         txt_runfix = False
 
     details = updateDetails(trouble, "trouble", details)
-    return details, txt
+    return details, txt_runfix
 
 
 def scrapeFolder(folder, details):
