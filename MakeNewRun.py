@@ -557,7 +557,21 @@ def scrapeProblems(details):
             tree = ET.parse(os.path.join(dirpath, eachfile))
             root = tree.getroot()
 
-            # TODO: Update hx.js to use the VPail.
+            # Update hx.js to use the VPail.
+            changed = False
+            scripts = root.iter("script")
+            for s in scripts:
+                if s.attrib["src"] == "/static/hx.js":
+                    s.set("src", "https://static.vpal.harvard.edu/cdn/universal/hx.js")
+                    changed = True
+
+            sheets = root.iter("link")
+            for css in sheets:
+                if css.attrib["href"] == "/static/hx.css":
+                    css.set(
+                        "href", "https://static.vpal.harvard.edu/cdn/universal/hx.css"
+                    )
+                    changed = True
 
             # Is this problem outside the paywall?
             if root.attrib.get("group_access", False):
@@ -578,6 +592,9 @@ def scrapeProblems(details):
                 problems["solutions"] += 1
             else:
                 trouble["no_solution"].append("problem/" + eachfile)
+
+            if changed:
+                tree.write(eachfile, encoding="UTF-8", xml_declaration=False)
 
             problems["total"] += 1
 
@@ -623,6 +640,15 @@ def scrapePage(file_contents, filename, folder, details):
     # Find all instances of course_run in links in XML and HTML files,
     # and replace them with the new one. Only write file if it changed.
     txt_runfix = txt.replace(run["old"], run["new"])
+
+    # Replace hx.js and hx.css with VPail references
+    txt_runfix = txt.replace(
+        "/static/hx.js", "https://static.vpal.harvard.edu/cdn/universal/hx.js"
+    )
+    txt_runfix = txt.replace(
+        "/static/hx.css", "https://static.vpal.harvard.edu/cdn/universal/hx.css"
+    )
+
     if txt_runfix == txt:
         txt_runfix = False
 
