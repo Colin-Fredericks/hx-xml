@@ -653,7 +653,8 @@ def scrapeFolder(folder, details):
                     os.path.join(pathname, "course", folder, eachfile), mode="w"
                 ) as file_contents:
                     file_contents.write(txt)
-                    return det
+
+            return det
 
 
 ################################
