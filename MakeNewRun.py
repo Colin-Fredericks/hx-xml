@@ -25,7 +25,7 @@ Options:
   -d  Prompt for new dates for start/end of course.
   -h  Print this help message and exit.
 
-Last update: May 4th 2021
+Last update: May 11th 2021
 """
 
 
@@ -371,7 +371,6 @@ def scrapeChapters(details):
         for eachfile in filenames:
 
             # Get the XML for each file
-            print("\ngetting chapter XML\n" + eachfile + "\n")
             tree = ET.parse(os.path.join(dirpath, eachfile))
             root = tree.getroot()
 
@@ -438,7 +437,6 @@ def scrapeVerticals(details):
         for eachfile in filenames:
 
             # Get the XML for each file
-            print("\ngetting vertical XML\n" + eachfile + "\n")
             tree = ET.parse(os.path.join(dirpath, eachfile))
             root = tree.getroot()
 
@@ -486,7 +484,6 @@ def scrapeVideos(details):
         for eachfile in filenames:
 
             # Get the XML for each file
-            print("\ngetting video XML\n" + eachfile + "\n")
             tree = ET.parse(os.path.join(dirpath, eachfile))
             root = tree.getroot()
 
@@ -556,7 +553,6 @@ def scrapeProblems(details):
         for eachfile in filenames:
 
             # Get the XML for each file
-            print("\ngetting problem XML\n" + eachfile + "\n")
             tree = ET.parse(os.path.join(dirpath, eachfile))
             root = tree.getroot()
 
@@ -679,16 +675,12 @@ def scrapeFolder(folder, details):
         right_files = [x for x in filenames if x[-(len(extension)) :] == extension]
         for eachfile in right_files:
 
-            print("\nsending to scrapePage")
-            print(eachfile + "\n")
             det, txt = scrapePage(dirpath, eachfile, details)
 
             if txt != False:
                 with open(
                     os.path.join(pathname, "course", folder, eachfile), mode="w"
                 ) as file_contents:
-                    print("\nwriting new file")
-                    print(eachfile + "\n")
                     file_contents.write(txt)
 
             return det
