@@ -337,8 +337,7 @@ def handlePolicies(details):
                 os.path.join(
                     pathname,
                     "course",
-                    "tas",
-                    run["new"],
+                    "tabs",
                     faq_search[0]["url_slug"] + ".html",
                 )
             )
@@ -593,37 +592,44 @@ def scrapeProblems(details):
 ################################
 # HTML and Tab Scraping
 ################################
-def scrapePage(file_contents, filename, folder, details):
-    trouble = {}
+def scrapePage(folder, filename, details):
+    trouble = {
+        "iframes": [],
+        "flash_links": [],
+        "discussion_links": [],
+        "top_tab_js": [],
+    }
     run = details["run"]
 
-    # Get the whole-file text so we can search it:
-    txt = file_contents.read()
+    with open(os.path.join(folder, filename), mode="r") as f:
 
-    if "<iframe" in txt:
-        trouble["iframes"].append(folder + "/" + filename)
-    if ".swf" in txt:
-        trouble["flash_links"].append(folder + "/" + filename)
-    if "/discusison/forum" in txt:
-        trouble["discussion_links"].append(folder + "/" + filename)
-    if (
-        "$('.navbar')" in txt
-        or "$('.course-tabs')" in txt
-        or "$('.navbar-nav')" in txt
-        or '$(".navbar")' in txt  # double OR single quotes
-        or '$(".course-tabs")' in txt
-        or '$(".navbar-nav")' in txt
-    ):
-        trouble["top_tab_js"].append(folder + "/" + filename)
+        # Get the whole-file text so we can search it:
+        txt = f.read()
 
-    # Find all instances of course_run in links in XML and HTML files,
-    # and replace them with the new one. Only write file if it changed.
-    txt_runfix = txt.replace(run["old"], run["new"])
-    if txt_runfix == txt:
-        txt_runfix = False
+        if "<iframe" in txt:
+            trouble["iframes"].append(folder + "/" + filename)
+        if ".swf" in txt:
+            trouble["flash_links"].append(folder + "/" + filename)
+        if "/discusison/forum" in txt:
+            trouble["discussion_links"].append(folder + "/" + filename)
+        if (
+            "$('.navbar')" in txt
+            or "$('.course-tabs')" in txt
+            or "$('.navbar-nav')" in txt
+            or '$(".navbar")' in txt  # double OR single quotes
+            or '$(".course-tabs")' in txt
+            or '$(".navbar-nav")' in txt
+        ):
+            trouble["top_tab_js"].append(folder + "/" + filename)
 
-    details = updateDetails(trouble, "trouble", details)
-    return details, txt_runfix
+        # Find all instances of course_run in links in XML and HTML files,
+        # and replace them with the new one. Only write file if it changed.
+        txt_runfix = txt.replace(run["old"], run["new"])
+        if txt_runfix == txt:
+            txt_runfix = False
+
+        details = updateDetails(trouble, "trouble", details)
+        return details, txt_runfix
 
 
 def scrapeFolder(folder, details):
@@ -640,17 +646,14 @@ def scrapeFolder(folder, details):
         right_files = [x for x in filenames if x[-(len(extension)) :] == extension]
         for eachfile in right_files:
 
-            with open(
-                os.path.join(pathname, "course", folder, eachfile), mode="r"
-            ) as file_contents:
-                det, txt = scrapePage(file_contents, eachfile, folder, details)
+            det, txt = scrapePage(dirpath, eachfile, details)
 
-            with open(
-                os.path.join(pathname, "course", folder, eachfile), mode="w"
-            ) as file_contents:
-                if txt != False:
+            if txt != False:
+                with open(
+                    os.path.join(pathname, "course", folder, eachfile), mode="w"
+                ) as file_contents:
                     file_contents.write(txt)
-                return det
+                    return det
 
 
 ################################
