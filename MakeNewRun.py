@@ -620,8 +620,6 @@ def scrapePage(folder, filename, details):
     }
     run = details["run"]
 
-    # TODO: Update hx.js to use the VPail.
-
     # Get the whole-file text so we can search it:
     with open(os.path.join(folder, filename), mode="r") as f:
         txt = f.read()
