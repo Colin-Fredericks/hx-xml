@@ -337,8 +337,7 @@ def handlePolicies(details):
                 os.path.join(
                     pathname,
                     "course",
-                    "tas",
-                    run["new"],
+                    "tabs",
                     faq_search[0]["url_slug"] + ".html",
                 )
             )
