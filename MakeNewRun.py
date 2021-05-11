@@ -371,6 +371,7 @@ def scrapeChapters(details):
         for eachfile in filenames:
 
             # Get the XML for each file
+            print("\ngetting chapter XML\n" + eachfile + "\n")
             tree = ET.parse(os.path.join(dirpath, eachfile))
             root = tree.getroot()
 
@@ -437,6 +438,7 @@ def scrapeVerticals(details):
         for eachfile in filenames:
 
             # Get the XML for each file
+            print("\ngetting vertical XML\n" + eachfile + "\n")
             tree = ET.parse(os.path.join(dirpath, eachfile))
             root = tree.getroot()
 
@@ -484,6 +486,7 @@ def scrapeVideos(details):
         for eachfile in filenames:
 
             # Get the XML for each file
+            print("\ngetting video XML\n" + eachfile + "\n")
             tree = ET.parse(os.path.join(dirpath, eachfile))
             root = tree.getroot()
 
@@ -553,6 +556,7 @@ def scrapeProblems(details):
         for eachfile in filenames:
 
             # Get the XML for each file
+            print("\ngetting problem XML\n" + eachfile + "\n")
             tree = ET.parse(os.path.join(dirpath, eachfile))
             root = tree.getroot()
 
@@ -611,48 +615,54 @@ def scrapeProblems(details):
 ################################
 # HTML and Tab Scraping
 ################################
-def scrapePage(file_contents, filename, folder, details):
-    trouble = {}
+def scrapePage(folder, filename, details):
+    trouble = {
+        "iframes": [],
+        "flash_links": [],
+        "discussion_links": [],
+        "top_tab_js": [],
+    }
     run = details["run"]
 
     # TODO: Update hx.js to use the VPail.
 
     # Get the whole-file text so we can search it:
-    txt = file_contents.read()
+    with open(os.path.join(folder, filename), mode="r") as f:
+        txt = f.read()
 
-    if "<iframe" in txt:
-        trouble["iframes"].append(folder + "/" + filename)
-    if ".swf" in txt:
-        trouble["flash_links"].append(folder + "/" + filename)
-    if "/discusison/forum" in txt:
-        trouble["discussion_links"].append(folder + "/" + filename)
-    if (
-        "$('.navbar')" in txt
-        or "$('.course-tabs')" in txt
-        or "$('.navbar-nav')" in txt
-        or '$(".navbar")' in txt  # double OR single quotes
-        or '$(".course-tabs")' in txt
-        or '$(".navbar-nav")' in txt
-    ):
-        trouble["top_tab_js"].append(folder + "/" + filename)
+        if "<iframe" in txt:
+            trouble["iframes"].append(folder + "/" + filename)
+        if ".swf" in txt:
+            trouble["flash_links"].append(folder + "/" + filename)
+        if "/discusison/forum" in txt:
+            trouble["discussion_links"].append(folder + "/" + filename)
+        if (
+            "$('.navbar')" in txt
+            or "$('.course-tabs')" in txt
+            or "$('.navbar-nav')" in txt
+            or '$(".navbar")' in txt  # double OR single quotes
+            or '$(".course-tabs")' in txt
+            or '$(".navbar-nav")' in txt
+        ):
+            trouble["top_tab_js"].append(folder + "/" + filename)
 
-    # Find all instances of course_run in links in XML and HTML files,
-    # and replace them with the new one. Only write file if it changed.
-    txt_runfix = txt.replace(run["old"], run["new"])
+        # Find all instances of course_run in links in XML and HTML files,
+        # and replace them with the new one. Only write file if it changed.
+        txt_runfix = txt.replace(run["old"], run["new"])
 
-    # Replace hx.js and hx.css with VPail references
-    txt_runfix = txt.replace(
-        "/static/hx.js", "https://static.vpal.harvard.edu/cdn/universal/hx.js"
-    )
-    txt_runfix = txt.replace(
-        "/static/hx.css", "https://static.vpal.harvard.edu/cdn/universal/hx.css"
-    )
+        # Replace hx.js and hx.css with VPail references
+        txt_runfix = txt.replace(
+            "/static/hx.js", "https://static.vpal.harvard.edu/cdn/universal/hx.js"
+        )
+        txt_runfix = txt.replace(
+            "/static/hx.css", "https://static.vpal.harvard.edu/cdn/universal/hx.css"
+        )
 
-    if txt_runfix == txt:
-        txt_runfix = False
+        if txt_runfix == txt:
+            txt_runfix = False
 
-    details = updateDetails(trouble, "trouble", details)
-    return details, txt_runfix
+        details = updateDetails(trouble, "trouble", details)
+        return details, txt_runfix
 
 
 def scrapeFolder(folder, details):
@@ -669,17 +679,19 @@ def scrapeFolder(folder, details):
         right_files = [x for x in filenames if x[-(len(extension)) :] == extension]
         for eachfile in right_files:
 
-            with open(
-                os.path.join(pathname, "course", folder, eachfile), mode="r"
-            ) as file_contents:
-                det, txt = scrapePage(file_contents, eachfile, folder, details)
+            print("\nsending to scrapePage")
+            print(eachfile + "\n")
+            det, txt = scrapePage(dirpath, eachfile, details)
 
-            with open(
-                os.path.join(pathname, "course", folder, eachfile), mode="w"
-            ) as file_contents:
-                if txt != False:
+            if txt != False:
+                with open(
+                    os.path.join(pathname, "course", folder, eachfile), mode="w"
+                ) as file_contents:
+                    print("\nwriting new file")
+                    print(eachfile + "\n")
                     file_contents.write(txt)
-                return det
+
+            return det
 
 
 ################################
