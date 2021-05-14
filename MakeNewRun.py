@@ -865,17 +865,21 @@ def getCommandLineArgs(args):
     # TODO: Handle input from a JSON file
     # Including dates and times
     ###########################
-    # parser.add_argument("file", action="store")
+    # parser.add_argument("file", action="store" default="false")
 
     args = parser.parse_args()
     if args.help:
         sys.exit(instructions)
 
-    if not os.path.exists(args.filename):
-        sys.exit("Filename not found: " + args.filename)
-    args.pathname = os.path.dirname(args.filename)
+    if args.file:
+        # JSON handling goes here.
+        pass
+    else:
+        if not os.path.exists(args.filename):
+            sys.exit("Filename not found: " + args.filename)
+        args.pathname = os.path.dirname(args.filename)
 
-    args.root_filename = "course/course.xml"
+        args.root_filename = "course/course.xml"
 
     return args
 
