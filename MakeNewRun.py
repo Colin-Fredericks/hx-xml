@@ -221,16 +221,6 @@ def updateFAQ(filename):
 
 
 #########################
-# TODO: Update Related Course file
-#########################
-def updateRelated(filename):
-    # Open the old Related Courses file
-    # Fix the edX search links if needed
-    # Save the file.
-    pass
-
-
-#########################
 # Course base files
 #########################
 def handleBaseFiles(details):
@@ -343,11 +333,6 @@ def handlePolicies(details):
             )
         else:
             run["faq_page"] = "Couldn't find"
-        related_search = [x for x in tabs if "Related Courses" in x["name"]]
-        if len(related_search) > 0:
-            updateRelated(related_search[0]["related_search"])
-        else:
-            run["related_courses_page"] = "Couldn't find"
 
     with open(
         os.path.join(pathname, "course", "policies", run["new"], "policy.json"), "w"
@@ -807,10 +792,7 @@ def createSummary(details):
                     txt += str(l) + "\n"
 
         txt += "\n"
-        if run["related_courses_page"] == "":
-            txt += "Replaced Related Courses page.\n"
-        else:
-            txt += "Could not find Related Courses page.\n"
+        txt += "Related Courses page must be replaced by hand.\n"
         if run["faq_page"] == "":
             txt += "Replaced FAQ page.\n"
         else:
