@@ -563,10 +563,14 @@ def scrapeProblems(details):
                     problems["ungated"] += 1
 
             # What type of problem is this?
+            p_tags = 0
             for t in problem_types:
                 check_type = root.iter(t)
                 for c in check_type:
                     problem_type_count[t] = problem_type_count[t] + 1
+                    p_tags += 1
+            if p_tags > 1:
+                problem_type_count["compound"] = problem_type_count["compound"] + 1
 
             # Does this problem have a non-empty solution?
             solutions = root.iter("solution")
@@ -585,7 +589,6 @@ def scrapeProblems(details):
     num_problem_tags = 0
     for t in problem_type_count:
         num_problem_tags += problem_type_count[t]
-    problem_type_count["compound"] = num_problem_tags - problems["total"]
 
     details = updateDetails(problem_type_count, "problems", details)
     details = updateDetails(problems, "problems", details)
