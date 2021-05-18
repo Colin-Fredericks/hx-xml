@@ -559,9 +559,6 @@ def scrapeProblems(details):
             else:
                 trouble["no_solution"].append("problem/" + eachfile)
 
-            if changed:
-                tree.write(eachfile, encoding="UTF-8", xml_declaration=False)
-
             problems["total"] += 1
 
     num_problem_tags = 0
