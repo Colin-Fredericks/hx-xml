@@ -24,8 +24,9 @@ The run_id will be something like 1T2077.
 Options:
   -d  Prompt for new dates for start/end of course.
   -h  Print this help message and exit.
+  -f  Specify a JSON file using -f=filename. Overrides -d flag.
 
-Last update: May 11th 2021
+Last update: May 18th 2021
 """
 
 
@@ -133,7 +134,7 @@ def setUpDetails(args):
             "old_start_edx": "",
             "pacing": "instructor-paced",
             "course_nickname": "",
-            "pathname": os.path.dirname(args.filename),
+            "pathname": os.path.dirname(args.tarfile),
             "lti_passports": [],
             "display_name": "",
             "faq_page": "",
@@ -826,24 +827,32 @@ def getDates(args, details):
     use_new_dates = args.dates
     dates = details["dates"]
 
-    dates["new_start_edx"] = pythonDateToEdx(
-        dates["new_start_py"], datetime.datetime.now().time()
-    )
-    dates["new_end_edx"] = pythonDateToEdx(
-        dates["new_end_py"], datetime.datetime.now().time()
-    )
+    # Did we collect these from a JSON file?
+    if args.start and args.end:
+        dates["new_start_edx"] = args.start
+        dates["new_end_edx"] = args.end
+        dates["new_start_py"] = edxDateToPython(args.start)
+        dates["new_end_py"] = edxDateToPython(args.end)
+    else:
+        dates["new_start_edx"] = pythonDateToEdx(
+            dates["new_start_py"], datetime.datetime.now().time()
+        )
+        dates["new_end_edx"] = pythonDateToEdx(
+            dates["new_end_py"], datetime.datetime.now().time()
+        )
 
-    if use_new_dates:
-        start_date = input("Start date (yyyy-mm-dd) = ")
-        start_time = input("Start time (24h:min:sec) = ")
-        end_date = input("End date (yyyy-mm-dd) = ")
-        end_time = input("End time (24h:min:sec) = ")
-        dates["new_start_edx"] = start_date + "T" + start_time + "Z"
-        dates["new_end_edx"] = end_date + "T" + end_time + "Z"
+        # Are we collecting these from the command line?
+        if use_new_dates:
+            start_date = input("Start date (yyyy-mm-dd) = ")
+            start_time = input("Start time (24h:min:sec) = ")
+            end_date = input("End date (yyyy-mm-dd) = ")
+            end_time = input("End time (24h:min:sec) = ")
+            dates["new_start_edx"] = start_date + "T" + start_time + "Z"
+            dates["new_end_edx"] = end_date + "T" + end_time + "Z"
 
-        # Are any of these in the past? Flag that.
-        dates["new_start_py"] = edxDateToPython(dates["new_start_edx"])["date"]
-        dates["new_end_py"] = edxDateToPython(dates["new_end_edx"])["date"]
+            # Are any of these in the past? Flag that.
+            dates["new_start_py"] = edxDateToPython(dates["new_start_edx"])["date"]
+            dates["new_end_py"] = edxDateToPython(dates["new_end_edx"])["date"]
 
     details = updateDetails(dates, "dates", details)
     return details
@@ -856,10 +865,11 @@ def getCommandLineArgs(args):
 
     # Read in the filename and options
     parser = argparse.ArgumentParser(usage=instructions, add_help=False)
-    parser.add_argument("filename", default="course.tar.gz")
+    parser.add_argument("tarfile", default="course.tar.gz")
     parser.add_argument("run", default=None)
     parser.add_argument("-h", "--help", action="store_true")
     parser.add_argument("-d", "--dates", action="store_true")
+    parser.add_argument("-f", "--file", default=None, action="store")
 
     ###########################
     # TODO: Handle input from a JSON file
@@ -871,15 +881,29 @@ def getCommandLineArgs(args):
     if args.help:
         sys.exit(instructions)
 
-    if args.file:
-        # JSON handling goes here.
-        pass
-    else:
-        if not os.path.exists(args.filename):
-            sys.exit("Filename not found: " + args.filename)
-        args.pathname = os.path.dirname(args.filename)
+    # Handle JSON file input. Specifically, in this format:
+    """
+    {
+        "start": "2030-01-31T14:15:00+00:00",
+        "end:" "2030-01-31T20:15:00+00:00",
+        "run": "1T2030",
+        "tarfile": "course_tar_file.tar.gz"
+    }
+    """
+    if args.file is not None:
+        if not os.path.exists(args.file):
+            sys.exit("Course export not found: " + args.tarfile)
+        new_args = json.load(args.file)
+        args.tarfile = new_args["tarfile"]
+        args.run = new_args["run"]
+        args.start = new_args["start"]
+        args.end = new_args["end"]
 
-        args.root_filename = "course/course.xml"
+    if not os.path.exists(args.tarfile):
+        sys.exit("Course export not found: " + args.tarfile)
+    args.pathname = os.path.dirname(args.tarfile)
+
+    args.root_filename = "course/course.xml"
 
     return args
 
@@ -887,15 +911,15 @@ def getCommandLineArgs(args):
 #######################
 # Main starts here
 #######################
-def main():
+def MakeNewRun():
 
     args = getCommandLineArgs(sys.argv)
 
     # Make a copy of the tarball for backup purposes
-    shutil.copy2(args.filename, args.filename[:-7] + "_backup.tar.gz")
+    shutil.copy2(args.tarfile, args.tarfile[:-7] + "_backup.tar.gz")
 
     # Extract the tarball.
-    tar = tarfile.open(args.filename)
+    tar = tarfile.open(args.tarfile)
     tar.extractall(args.pathname)
     tar.close()
 
@@ -934,4 +958,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    MakeNewRun(sys.argv)
