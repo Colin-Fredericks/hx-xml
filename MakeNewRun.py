@@ -47,16 +47,8 @@ def edxDateToPython(date_string):
     )
 
 
-def pythonDateToEdx(pydate, pytime):
+def pythonDateToEdx(moment):
     # return will be is in edx's format: 2030-01-01T00:00:00+00:00
-    date_list = [
-        pydate.year,
-        pydate.month,
-        pydate.day,
-        pytime.hour,
-        pytime.minute,
-        pytime.second,
-    ]
 
     date_list_str = [str(x) for x in date_list]
     date_list_full = []
@@ -64,12 +56,12 @@ def pythonDateToEdx(pydate, pytime):
         date_list_full.append(d if len(d) > 1 else "0" + d)
 
     date_string = ""
-    date_string += date_list_full[0] + "-"
-    date_string += date_list_full[1] + "-"
-    date_string += date_list_full[2] + "T"
-    date_string += date_list_full[3] + ":"
-    date_string += date_list_full[4] + ":"
-    date_string += date_list_full[5] + "+"
+    date_string += moment.year + "-"
+    date_string += moment.month + "-"
+    date_string += moment.day + "T"
+    date_string += moment.hour + ":"
+    date_string += moment.minute + ":"
+    date_string += moment.second + "+"
     date_string += "00:00"
 
     return date_string
@@ -384,8 +376,7 @@ def updateORA(child, tree, dirpath, eachfile, details):
     course_start = details["dates"]["new_start_edx"]
     course_end = details["dates"]["new_end_edx"]
     submission_end = pythonDateToEdx(
-        details["dates"]["new_end_py"] - datetime.timedelta(7),
-        datetime.time(0),
+        details["dates"]["new_end_py"] - datetime.timedelta(7)
     )
 
     # Submissions start at course start and are due a week before course end.
@@ -399,7 +390,7 @@ def updateORA(child, tree, dirpath, eachfile, details):
     peer_grading[0].attrib["start"] = course_start
     peer_grading[0].attrib["due"] = course_end
 
-    # If we made changes, close and write file.
+    # Close and write file.
     tree.write(
         os.path.join(dirpath, eachfile),
         encoding="UTF-8",
@@ -834,11 +825,6 @@ def getCommandLineArgs(args):
     parser.add_argument("-h", "--help", action="store_true")
     parser.add_argument("-d", "--dates", action="store_true")
     parser.add_argument("-f", "--file", action="store", default=None)
-
-    ###########################
-    # TODO: Handle input from a JSON file
-    # Including dates and times
-    ###########################
 
     args = parser.parse_args()
     if args.help:
