@@ -23,7 +23,7 @@ Options:
   -f  Specify a JSON settings file using -f=filename. Overrides other flags.
   -d  Prompt for new dates for start/end of course.
   -h  Print this help message and exit.
-  -r  Specity a run number using -r="3T2077"
+  -r  Specity a run number using -r="1T2077".
 
 Last update: May 18th 2021
 """
@@ -141,14 +141,10 @@ def setUpDetails(args):
         },
         # Note the placeholder values: Course starts today, ends a year from today.
         "dates": {
-            "new_start_py": datetime.datetime.combine(
-                datetime.date.today(), datetime.time(0)
-            ),
-            "new_end_py": datetime.datetime.combine(
-                datetime.date.today() + datetime.timedelta(365), datetime.time(0)
-            ),
-            "new_start_edx": "",
-            "new_end_edx": "",
+            "new_start_py": edxDateToPython(args.start),
+            "new_end_py": edxDateToPython(args.end),
+            "new_start_edx": args.start,
+            "new_end_edx": args.end,
             "old_start_edx": "",
             "old_end_edx": "",
             "date_delta": "",
@@ -703,10 +699,10 @@ def createSummary(details):
         txt += "Identifier: " + run["id"] + " " + run["new"] + "\n"
         txt += "New Start: " + dates["new_start_edx"] + "\n"
         if dates["new_start_py"] < datetime.datetime.now():
-            txt += "WARNING: course starts in the past"
+            txt += "WARNING: course starts in the past\n"
         txt += "New End: " + dates["new_end_edx"] + "\n"
         if dates["new_end_py"] < datetime.datetime.now():
-            txt += "WARNING: course ends in the past"
+            txt += "WARNING: course ends in the past\n"
         txt += "Pacing: " + run["pacing"] + "\n"
         txt += "\n"
         txt += "Number of sections: " + str(details["chapters"]["num_chapters"]) + "\n"
@@ -824,41 +820,7 @@ def createSummary(details):
 
 
 #########################
-# Get dates from user input
-#########################
-def getDates(args, details):
-    use_new_dates = args.dates
-    dates = details["dates"]
-
-    # Did we collect these from a JSON file?
-    try:
-        dates["new_start_edx"] = args.start  # Might not exist.
-        dates["new_end_edx"] = args.end  # Might not exist.
-        dates["new_start_py"] = edxDateToPython(args.start)
-        dates["new_end_py"] = edxDateToPython(args.end)
-    except AttributeError:
-        dates["new_start_edx"] = pythonDateToEdx(datetime.datetime.now())
-        dates["new_end_edx"] = pythonDateToEdx(datetime.datetime.now())
-
-        # Are we collecting these from the command line?
-        if use_new_dates:
-            start_date = input("Start date (yyyy-mm-dd) = ")
-            start_time = input("Start time (24h:min:sec) = ")
-            end_date = input("End date (yyyy-mm-dd) = ")
-            end_time = input("End time (24h:min:sec) = ")
-            dates["new_start_edx"] = start_date + "T" + start_time + "Z"
-            dates["new_end_edx"] = end_date + "T" + end_time + "Z"
-
-            # Are any of these in the past? Flag that.
-            dates["new_start_py"] = edxDateToPython(dates["new_start_edx"])["date"]
-            dates["new_end_py"] = edxDateToPython(dates["new_end_edx"])["date"]
-
-    details = updateDetails(dates, "dates", details)
-    return details
-
-
-#########################
-# Command Line Args
+# Command Line Args and Dates
 #########################
 def getCommandLineArgs(args):
 
@@ -898,14 +860,29 @@ def getCommandLineArgs(args):
             sys.exit("JSON settings file not found: " + args.file)
         with open(args.file, "r") as f:
             new_args = json.load(f)
+
+            # Check for all arguments
+            for k in ["start", "end", "run", "tarfile"]:
+                if k not in new_args:
+                    sys.exit("Missing key: " + k)
+
             if args.tarfile is None:
                 args.tarfile = new_args["tarfile"]
             args.run = new_args["run"]
             args.start = new_args["start"]
             args.end = new_args["end"]
+    else:
+        # Get dates from user input
+        print("Please input the start dates and times:")
+        start_date = input("Start date (2077-01-31) = ") or "2077-01-31"
+        start_time = input("Start time (15:00:00) = ") or "15:00:00"
+        args.start = start_date + "T" + start_time + "+00:00"
+        end_date = input("End date (2078-02-28) = ") or "2078-02-28"
+        end_time = input("End time (23:59:59) = ") or "23:59:59"
+        args.end = end_date + "T" + end_time + "+00:00"
 
     if args.run is None:
-        args.run = input("Run number (3T2077) = ")
+        args.run = input("Run number (1T2077) = ") or "1T2077"
 
     args.root_filename = "course/course.xml"
 
@@ -928,9 +905,6 @@ def MakeNewRun(argv):
     tar.close()
 
     details = setUpDetails(args)
-    details = getDates(args, details)
-
-    faq_filename = ""
 
     details = handleBaseFiles(details)
     details = handlePolicies(details)
