@@ -2,7 +2,6 @@ import os
 import re
 import sys
 import json
-import math
 import shutil
 import tarfile
 import argparse
@@ -13,19 +12,19 @@ from xml.etree import ElementTree as ET
 
 instructions = """
 To use:
-python3 MakeNewRun.py coursefile.tar.gz run_id (options)
+python3 MakeNewRun.py coursefile.tar.gz (options)
 
 This script takes an existing course tarball and creates a new one,
 named coursefile.new.tar.gz , with hardcoded links, folders, and filenames
 updated for the new run.
 
-The run_id will be something like 1T2077.
-
 Options:
+  -f  Specify a JSON settings file using -f=filename. Overrides other flags.
   -d  Prompt for new dates for start/end of course.
+  -r  Specify a run number using -r="1T2077".
   -h  Print this help message and exit.
 
-Last update: May 4th 2021
+Last update: May 18th 2021
 """
 
 
@@ -36,27 +35,23 @@ def edxDateToPython(date_string):
     # date_string is in edx's format: 2030-01-01T00:00:00+00:00
     # sometimes ends with a Z instead of +whatever
     # split on -, T, :, Z, and +
-    # Resulting list is year, month, day, 24hours, minutes,seconds, something something.
+    # Resulting list is year, month, day, 24hours, minutes, seconds, something something.
     date_list_str = re.split("-|T|:|\+|Z", date_string)
     date_list = [
         int(x.replace('"', "").replace("'", "")) for x in date_list_str if len(x) > 0
     ]
-    return {
-        "date": datetime.date(date_list[0], date_list[1], date_list[2]),
-        "time": datetime.time(date_list[3], date_list[4], date_list[5]),
-    }
+    return datetime.datetime(
+        date_list[0],
+        date_list[1],
+        date_list[2],
+        date_list[3],
+        date_list[4],
+        date_list[5],
+    )
 
 
-def pythonDateToEdx(pydate, pytime):
+def pythonDateToEdx(moment):
     # return will be is in edx's format: 2030-01-01T00:00:00+00:00
-    date_list = [
-        pydate.year,
-        pydate.month,
-        pydate.day,
-        pytime.hour,
-        pytime.minute,
-        pytime.second,
-    ]
 
     date_list_str = [str(x) for x in date_list]
     date_list_full = []
@@ -64,12 +59,12 @@ def pythonDateToEdx(pydate, pytime):
         date_list_full.append(d if len(d) > 1 else "0" + d)
 
     date_string = ""
-    date_string += date_list_full[0] + "-"
-    date_string += date_list_full[1] + "-"
-    date_string += date_list_full[2] + "T"
-    date_string += date_list_full[3] + ":"
-    date_string += date_list_full[4] + ":"
-    date_string += date_list_full[5] + "+"
+    date_string += moment.year + "-"
+    date_string += moment.month + "-"
+    date_string += moment.day + "T"
+    date_string += moment.hour + ":"
+    date_string += moment.minute + ":"
+    date_string += moment.second + "+"
     date_string += "00:00"
 
     return date_string
@@ -133,7 +128,7 @@ def setUpDetails(args):
             "old_start_edx": "",
             "pacing": "instructor-paced",
             "course_nickname": "",
-            "pathname": os.path.dirname(args.filename),
+            "pathname": os.path.dirname(args.tarfile),
             "lti_passports": [],
             "display_name": "",
             "faq_page": "",
@@ -141,10 +136,10 @@ def setUpDetails(args):
         },
         # Note the placeholder values: Course starts today, ends a year from today.
         "dates": {
-            "new_start_py": datetime.date.today(),
-            "new_end_py": datetime.date.today() + datetime.timedelta(365),
-            "new_start_edx": "",
-            "new_end_edx": "",
+            "new_start_py": edxDateToPython(args.start),
+            "new_end_py": edxDateToPython(args.end),
+            "new_start_edx": args.start,
+            "new_end_edx": args.end,
             "old_start_edx": "",
             "old_end_edx": "",
             "date_delta": "",
@@ -157,7 +152,7 @@ def setUpDetails(args):
             "solutions": 0,
             "choiceresponse": 0,
             "customresponse": 0,
-            "optioninput": 0,
+            "optionresponse": 0,
             "numericalresponse": 0,
             "multiplechoiceresponse": 0,
             "stringresponse": 0,
@@ -221,16 +216,6 @@ def updateFAQ(filename):
 
 
 #########################
-# TODO: Update Related Course file
-#########################
-def updateRelated(filename):
-    # Open the old Related Courses file
-    # Fix the edX search links if needed
-    # Save the file.
-    pass
-
-
-#########################
 # Course base files
 #########################
 def handleBaseFiles(details):
@@ -274,7 +259,7 @@ def handleBaseFiles(details):
     tree.write(run_file, encoding="UTF-8", xml_declaration=False)
 
     # Convert old_start_date to a Python datetime object for later manipulation
-    date["old_start_py"] = edxDateToPython(date["old_start_edx"])["date"]
+    date["old_start_py"] = edxDateToPython(date["old_start_edx"])
     date["date_delta"] = date["new_start_py"] - date["old_start_py"]
 
     details = updateDetails(run, "run", details)
@@ -343,11 +328,6 @@ def handlePolicies(details):
             )
         else:
             run["faq_page"] = "Couldn't find"
-        related_search = [x for x in tabs if "Related Courses" in x["name"]]
-        if len(related_search) > 0:
-            updateRelated(related_search[0]["related_search"])
-        else:
-            run["related_courses_page"] = "Couldn't find"
 
     with open(
         os.path.join(pathname, "course", "policies", run["new"], "policy.json"), "w"
@@ -399,8 +379,7 @@ def updateORA(child, tree, dirpath, eachfile, details):
     course_start = details["dates"]["new_start_edx"]
     course_end = details["dates"]["new_end_edx"]
     submission_end = pythonDateToEdx(
-        details["dates"]["new_end_py"] - datetime.timedelta(7),
-        datetime.time(0),
+        details["dates"]["new_end_py"] - datetime.timedelta(7)
     )
 
     # Submissions start at course start and are due a week before course end.
@@ -414,7 +393,7 @@ def updateORA(child, tree, dirpath, eachfile, details):
     peer_grading[0].attrib["start"] = course_start
     peer_grading[0].attrib["due"] = course_end
 
-    # If we made changes, close and write file.
+    # Close and write file.
     tree.write(
         os.path.join(dirpath, eachfile),
         encoding="UTF-8",
@@ -528,7 +507,7 @@ def scrapeProblems(details):
     problem_types = [
         "choiceresponse",
         "customresponse",
-        "optioninput",
+        "optionresponse",
         "numericalresponse",
         "multiplechoiceresponse",
         "stringresponse",
@@ -537,7 +516,7 @@ def scrapeProblems(details):
     problem_type_count = {
         "choiceresponse": 0,
         "customresponse": 0,
-        "optioninput": 0,
+        "optionresponse": 0,
         "numericalresponse": 0,
         "multiplechoiceresponse": 0,
         "stringresponse": 0,
@@ -562,10 +541,14 @@ def scrapeProblems(details):
                     problems["ungated"] += 1
 
             # What type of problem is this?
+            p_tags = 0
             for t in problem_types:
                 check_type = root.iter(t)
                 for c in check_type:
                     problem_type_count[t] = problem_type_count[t] + 1
+                    p_tags += 1
+            if p_tags > 1:
+                problem_type_count["compound"] = problem_type_count["compound"] + 1
 
             # Does this problem have a non-empty solution?
             solutions = root.iter("solution")
@@ -576,12 +559,14 @@ def scrapeProblems(details):
             else:
                 trouble["no_solution"].append("problem/" + eachfile)
 
+            if changed:
+                tree.write(eachfile, encoding="UTF-8", xml_declaration=False)
+
             problems["total"] += 1
 
     num_problem_tags = 0
     for t in problem_type_count:
         num_problem_tags += problem_type_count[t]
-    problem_type_count["compound"] = num_problem_tags - problems["total"]
 
     details = updateDetails(problem_type_count, "problems", details)
     details = updateDetails(problems, "problems", details)
@@ -601,9 +586,9 @@ def scrapePage(folder, filename, details):
     }
     run = details["run"]
 
+    # Get the whole-file text so we can search it:
     with open(os.path.join(folder, filename), mode="r") as f:
 
-        # Get the whole-file text so we can search it:
         txt = f.read()
 
         if "<iframe" in txt:
@@ -686,11 +671,11 @@ def createSummary(details):
         txt += "Course name: " + run["display_name"] + "\n"
         txt += "Identifier: " + run["id"] + " " + run["new"] + "\n"
         txt += "New Start: " + dates["new_start_edx"] + "\n"
-        if dates["new_start_py"] < datetime.date.today():
-            txt += "WARNING: course starts in the past"
+        if dates["new_start_py"] < datetime.datetime.now():
+            txt += "WARNING: course starts in the past\n"
         txt += "New End: " + dates["new_end_edx"] + "\n"
-        if dates["new_end_py"] < datetime.date.today():
-            txt += "WARNING: course ends in the past"
+        if dates["new_end_py"] < datetime.datetime.now():
+            txt += "WARNING: course ends in the past\n"
         txt += "Pacing: " + run["pacing"] + "\n"
         txt += "\n"
         txt += "Number of sections: " + str(details["chapters"]["num_chapters"]) + "\n"
@@ -745,7 +730,7 @@ def createSummary(details):
         problem_type_translator = {
             "choiceresponse": "checkbox",
             "customresponse": "custom input",
-            "optioninput": "dropdown",
+            "optionresponse": "dropdown",
             "numericalresponse": "numerical",
             "multiplechoiceresponse": "multiple-choice",
             "stringresponse": "text",
@@ -780,10 +765,7 @@ def createSummary(details):
                     txt += str(l) + "\n"
 
         txt += "\n"
-        if run["related_courses_page"] == "":
-            txt += "Replaced Related Courses page.\n"
-        else:
-            txt += "Could not find Related Courses page.\n"
+        txt += "Related Courses page must be replaced by hand.\n"
         if run["faq_page"] == "":
             txt += "Replaced FAQ page.\n"
         else:
@@ -811,60 +793,64 @@ def createSummary(details):
 
 
 #########################
-# Get dates from user input
-#########################
-def getDates(args, details):
-    use_new_dates = args.dates
-    dates = details["dates"]
-
-    dates["new_start_edx"] = pythonDateToEdx(
-        dates["new_start_py"], datetime.datetime.now().time()
-    )
-    dates["new_end_edx"] = pythonDateToEdx(
-        dates["new_end_py"], datetime.datetime.now().time()
-    )
-
-    if use_new_dates:
-        start_date = input("Start date (yyyy-mm-dd) = ")
-        start_time = input("Start time (24h:min:sec) = ")
-        end_date = input("End date (yyyy-mm-dd) = ")
-        end_time = input("End time (24h:min:sec) = ")
-        dates["new_start_edx"] = start_date + "T" + start_time + "Z"
-        dates["new_end_edx"] = end_date + "T" + end_time + "Z"
-
-        # Are any of these in the past? Flag that.
-        dates["new_start_py"] = edxDateToPython(dates["new_start_edx"])["date"]
-        dates["new_end_py"] = edxDateToPython(dates["new_end_edx"])["date"]
-
-    details = updateDetails(dates, "dates", details)
-    return details
-
-
-#########################
-# Command Line Args
+# Command Line Args and Dates
 #########################
 def getCommandLineArgs(args):
 
     # Read in the filename and options
     parser = argparse.ArgumentParser(usage=instructions, add_help=False)
-    parser.add_argument("filename", default="course.tar.gz")
-    parser.add_argument("run", default=None)
+    parser.add_argument("tarfile", default=None)
+    parser.add_argument("-r", "--run", action="store", default=None)
     parser.add_argument("-h", "--help", action="store_true")
     parser.add_argument("-d", "--dates", action="store_true")
-
-    ###########################
-    # TODO: Handle input from a JSON file
-    # Including dates and times
-    ###########################
-    # parser.add_argument("file", action="store")
+    parser.add_argument("-f", "--file", action="store", default=None)
 
     args = parser.parse_args()
     if args.help:
         sys.exit(instructions)
 
-    if not os.path.exists(args.filename):
-        sys.exit("Filename not found: " + args.filename)
-    args.pathname = os.path.dirname(args.filename)
+    if not os.path.exists(args.tarfile):
+        sys.exit("Course export not found: " + args.tarfile)
+    args.pathname = os.path.dirname(args.tarfile)
+
+    # Handle JSON file input. Specifically, in this format:
+    """
+    {
+        "start": "2030-01-31T14:15:00+00:00",
+        "end:" "2030-01-31T20:15:00+00:00",
+        "run": "1T2030",
+        "tarfile": "course_tar_file.tar.gz"
+    }
+    """
+    if args.file is not None:
+        print("handling JSON input")
+        if not os.path.exists(args.file):
+            sys.exit("JSON settings file not found: " + args.file)
+        with open(args.file, "r") as f:
+            new_args = json.load(f)
+
+            # Check for all arguments
+            for k in ["start", "end", "run", "tarfile"]:
+                if k not in new_args:
+                    sys.exit("Missing key: " + k)
+
+            if args.tarfile is None:
+                args.tarfile = new_args["tarfile"]
+            args.run = new_args["run"]
+            args.start = new_args["start"]
+            args.end = new_args["end"]
+    else:
+        # Get dates from user input
+        print("Please input the start dates and times:")
+        start_date = input("Start date (2077-01-31) = ") or "2077-01-31"
+        start_time = input("Start time (15:00:00) = ") or "15:00:00"
+        args.start = start_date + "T" + start_time + "+00:00"
+        end_date = input("End date (2078-02-28) = ") or "2078-02-28"
+        end_time = input("End time (23:59:59) = ") or "23:59:59"
+        args.end = end_date + "T" + end_time + "+00:00"
+
+    if args.run is None:
+        args.run = input("Run number (1T2077) = ") or "1T2077"
 
     args.root_filename = "course/course.xml"
 
@@ -874,22 +860,19 @@ def getCommandLineArgs(args):
 #######################
 # Main starts here
 #######################
-def main():
+def MakeNewRun(argv):
 
-    args = getCommandLineArgs(sys.argv)
+    args = getCommandLineArgs(argv)
 
     # Make a copy of the tarball for backup purposes
-    shutil.copy2(args.filename, args.filename[:-7] + "_backup.tar.gz")
+    shutil.copy2(args.tarfile, args.tarfile[:-7] + "_backup.tar.gz")
 
     # Extract the tarball.
-    tar = tarfile.open(args.filename)
+    tar = tarfile.open(args.tarfile)
     tar.extractall(args.pathname)
     tar.close()
 
     details = setUpDetails(args)
-    details = getDates(args, details)
-
-    faq_filename = ""
 
     details = handleBaseFiles(details)
     details = handlePolicies(details)
@@ -908,7 +891,7 @@ def main():
     # Re-tar
     print("Creating tar.gz file... ")
     with tarfile.open(
-        details["run"]["course_nickname"] + "_" + details["run"]["new"] + ".tar.gz",
+        details["run"]["course_nickname"] + "_" + details["run"]["new"] + ".new.tar.gz",
         "w:gz",
     ) as tar:
         tar.add(
@@ -921,4 +904,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    MakeNewRun(sys.argv)

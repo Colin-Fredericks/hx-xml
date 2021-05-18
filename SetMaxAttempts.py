@@ -30,19 +30,20 @@ Last update: March 15th 2018
 """
 
 # Here are all the problem types we work on:
-allProbtypes = ['multiplechoiceresponse',
-    'choiceresponse',
-    'customresponse',
-    'formularesponse',
-    'numericalresponse',
-    'stringresponse',
+allProbtypes = [
+    "multiplechoiceresponse",
+    "choiceresponse",
+    "customresponse",
+    "formularesponse",
+    "numericalresponse",
+    "stringresponse",
 ]
 
 
 parser = argparse.ArgumentParser(usage=instructions, add_help=False)
-parser.add_argument('-h', '--help', action='store_true')
-parser.add_argument('number', default='auto')
-parser.add_argument('directory', default='.')
+parser.add_argument("-h", "--help", action="store_true")
+parser.add_argument("number", default="auto")
+parser.add_argument("directory", default=".")
 
 args = parser.parse_args()
 if args.help:
@@ -51,7 +52,7 @@ numberAttempts = args.number.lower()
 
 
 if not os.path.exists(args.directory):
-    sys.exit('Directory not found: ' + args.directory)
+    sys.exit("Directory not found: " + args.directory)
 
 numfiles = 0
 
@@ -66,11 +67,11 @@ for dirpath, dirnames, filenames in os.walk(args.directory):
         root = tree.getroot()
 
         # If this isn't a problem file, skip it.
-        if root.tag != 'problem':
+        if root.tag != "problem":
             continue
 
         # Auto-set the showanswer value
-        if numberAttempts == 'auto':
+        if numberAttempts == "auto":
 
             # Check the problem type
             for probtype in allProbtypes:
@@ -78,44 +79,47 @@ for dirpath, dirnames, filenames in os.walk(args.directory):
                     thisProbType.append(item.tag)
 
             # Check for number of choice elements
-            numberOptions = len(list(root.iter('choice')))
+            numberOptions = len(list(root.iter("choice")))
 
             # Set number of attempts properly
-            if 'multiplechoiceresponse' in thisProbType:
+            if "multiplechoiceresponse" in thisProbType:
                 if numberOptions <= 3:
-                    root.set('max_attempts', '1')
+                    root.set("max_attempts", "1")
                 elif numberOptions <= 6:
-                    root.set('max_attempts', '2')
+                    root.set("max_attempts", "2")
                 else:
-                    root.set('max_attempts', '3')
+                    root.set("max_attempts", "3")
 
-            if 'choiceresponse' in thisProbType:
-                root.set('max_attempts', str(numberOptions) if numberOptions <= 5 else '5')
+            if "choiceresponse" in thisProbType:
+                root.set(
+                    "max_attempts", str(numberOptions) if numberOptions <= 5 else "5"
+                )
 
-            if 'customresponse' in thisProbType or 'stringresponse' in thisProbType:
-                root.set('max_attempts', '5')
+            if "customresponse" in thisProbType or "stringresponse" in thisProbType:
+                root.set("max_attempts", "5")
 
-            if 'formularesponse' in thisProbType or 'numericalresponse' in thisProbType:
-                root.set('max_attempts', '10')
+            if "formularesponse" in thisProbType or "numericalresponse" in thisProbType:
+                root.set("max_attempts", "10")
 
         # Remove the max_attempts value to allow unlimited attempts or course default
-        elif numberAttempts == 'default' or numberAttempts == 'default':
+        elif numberAttempts == "default":
             try:
-                del root.attrib['max_attempts']
+                del root.attrib["max_attempts"]
             except:
                 pass
 
         # For non-auto mode.
         else:
-            root.set('max_attempts', numberAttempts)
-
+            root.set("max_attempts", numberAttempts)
 
         # Save the file
-        tree.write(os.path.join(dirpath, eachfile), encoding='UTF-8', xml_declaration=False)
+        tree.write(
+            os.path.join(dirpath, eachfile), encoding="UTF-8", xml_declaration=False
+        )
         numfiles += 1
 
 
 if numfiles == 0:
-    print('No files found - wrong or empty directory?')
+    print("No files found - wrong or empty directory?")
 else:
-    print('Max Attempts set for ' + str(numfiles) + ' files.')
+    print("Max Attempts set for " + str(numfiles) + " files.")
