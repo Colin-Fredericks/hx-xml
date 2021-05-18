@@ -41,10 +41,10 @@ def edxDateToPython(date_string):
     date_list = [
         int(x.replace('"', "").replace("'", "")) for x in date_list_str if len(x) > 0
     ]
-    return {
-        "date": datetime.date(date_list[0], date_list[1], date_list[2]),
-        "time": datetime.time(date_list[3], date_list[4], date_list[5]),
-    }
+    return datetime.datetime.combine(
+        datetime.date(date_list[0], date_list[1], date_list[2]),
+        datetime.time(date_list[3], date_list[4], date_list[5]),
+    )
 
 
 def pythonDateToEdx(pydate, pytime):
@@ -141,8 +141,12 @@ def setUpDetails(args):
         },
         # Note the placeholder values: Course starts today, ends a year from today.
         "dates": {
-            "new_start_py": datetime.date.today(),
-            "new_end_py": datetime.date.today() + datetime.timedelta(365),
+            "new_start_py": datetime.datetime.combine(
+                datetime.date.today(), datetime.time(0)
+            ),
+            "new_end_py": datetime.datetime.combine(
+                datetime.date.today() + datetime.timedelta(365), datetime.time(0)
+            ),
             "new_start_edx": "",
             "new_end_edx": "",
             "old_start_edx": "",
@@ -265,7 +269,7 @@ def handleBaseFiles(details):
 
     # Convert old_start_date to a Python datetime object for later manipulation
     date["old_start_py"] = edxDateToPython(date["old_start_edx"])
-    date["date_delta"] = date["new_start_py"]["date"] - date["old_start_py"]["date"]
+    date["date_delta"] = date["new_start_py"] - date["old_start_py"]
 
     details = updateDetails(run, "run", details)
     details = updateDetails(date, "dates", details)
@@ -698,10 +702,10 @@ def createSummary(details):
         txt += "Course name: " + run["display_name"] + "\n"
         txt += "Identifier: " + run["id"] + " " + run["new"] + "\n"
         txt += "New Start: " + dates["new_start_edx"] + "\n"
-        if dates["new_start_py"]["date"] < datetime.date.today():
+        if dates["new_start_py"] < datetime.datetime.now():
             txt += "WARNING: course starts in the past"
         txt += "New End: " + dates["new_end_edx"] + "\n"
-        if dates["new_end_py"]["date"] < datetime.date.today():
+        if dates["new_end_py"] < datetime.datetime.now():
             txt += "WARNING: course ends in the past"
         txt += "Pacing: " + run["pacing"] + "\n"
         txt += "\n"
@@ -833,12 +837,8 @@ def getDates(args, details):
         dates["new_start_py"] = edxDateToPython(args.start)
         dates["new_end_py"] = edxDateToPython(args.end)
     except AttributeError:
-        dates["new_start_edx"] = pythonDateToEdx(
-            dates["new_start_py"], datetime.datetime.now().time()
-        )
-        dates["new_end_edx"] = pythonDateToEdx(
-            dates["new_end_py"], datetime.datetime.now().time()
-        )
+        dates["new_start_edx"] = pythonDateToEdx(datetime.datetime.now())
+        dates["new_end_edx"] = pythonDateToEdx(datetime.datetime.now())
 
         # Are we collecting these from the command line?
         if use_new_dates:
