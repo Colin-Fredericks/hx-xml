@@ -2,7 +2,6 @@ import os
 import re
 import sys
 import json
-import math
 import shutil
 import tarfile
 import argparse
@@ -22,8 +21,8 @@ updated for the new run.
 Options:
   -f  Specify a JSON settings file using -f=filename. Overrides other flags.
   -d  Prompt for new dates for start/end of course.
+  -r  Specify a run number using -r="1T2077".
   -h  Print this help message and exit.
-  -r  Specity a run number using -r="1T2077".
 
 Last update: May 18th 2021
 """
@@ -36,14 +35,18 @@ def edxDateToPython(date_string):
     # date_string is in edx's format: 2030-01-01T00:00:00+00:00
     # sometimes ends with a Z instead of +whatever
     # split on -, T, :, Z, and +
-    # Resulting list is year, month, day, 24hours, minutes,seconds, something something.
+    # Resulting list is year, month, day, 24hours, minutes, seconds, something something.
     date_list_str = re.split("-|T|:|\+|Z", date_string)
     date_list = [
         int(x.replace('"', "").replace("'", "")) for x in date_list_str if len(x) > 0
     ]
-    return datetime.datetime.combine(
-        datetime.date(date_list[0], date_list[1], date_list[2]),
-        datetime.time(date_list[3], date_list[4], date_list[5]),
+    return datetime.datetime(
+        date_list[0],
+        date_list[1],
+        date_list[2],
+        date_list[3],
+        date_list[4],
+        date_list[5],
     )
 
 
