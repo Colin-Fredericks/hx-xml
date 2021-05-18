@@ -13,18 +13,17 @@ from xml.etree import ElementTree as ET
 
 instructions = """
 To use:
-python3 MakeNewRun.py coursefile.tar.gz run_id (options)
+python3 MakeNewRun.py coursefile.tar.gz (options)
 
 This script takes an existing course tarball and creates a new one,
 named coursefile.new.tar.gz , with hardcoded links, folders, and filenames
 updated for the new run.
 
-The run_id will be something like 1T2077.
-
 Options:
+  -f  Specify a JSON settings file using -f=filename. Overrides other flags.
   -d  Prompt for new dates for start/end of course.
   -h  Print this help message and exit.
-  -f  Specify a JSON file using -f=filename. Overrides -d flag.
+  -r  Specity a run number using -r="3T2077"
 
 Last update: May 18th 2021
 """
@@ -158,7 +157,7 @@ def setUpDetails(args):
             "solutions": 0,
             "choiceresponse": 0,
             "customresponse": 0,
-            "optioninput": 0,
+            "optionresponse": 0,
             "numericalresponse": 0,
             "multiplechoiceresponse": 0,
             "stringresponse": 0,
@@ -265,8 +264,8 @@ def handleBaseFiles(details):
     tree.write(run_file, encoding="UTF-8", xml_declaration=False)
 
     # Convert old_start_date to a Python datetime object for later manipulation
-    date["old_start_py"] = edxDateToPython(date["old_start_edx"])["date"]
-    date["date_delta"] = date["new_start_py"] - date["old_start_py"]
+    date["old_start_py"] = edxDateToPython(date["old_start_edx"])
+    date["date_delta"] = date["new_start_py"]["date"] - date["old_start_py"]["date"]
 
     details = updateDetails(run, "run", details)
     details = updateDetails(date, "dates", details)
@@ -514,7 +513,7 @@ def scrapeProblems(details):
     problem_types = [
         "choiceresponse",
         "customresponse",
-        "optioninput",
+        "optionresponse",
         "numericalresponse",
         "multiplechoiceresponse",
         "stringresponse",
@@ -523,7 +522,7 @@ def scrapeProblems(details):
     problem_type_count = {
         "choiceresponse": 0,
         "customresponse": 0,
-        "optioninput": 0,
+        "optionresponse": 0,
         "numericalresponse": 0,
         "multiplechoiceresponse": 0,
         "stringresponse": 0,
@@ -699,10 +698,10 @@ def createSummary(details):
         txt += "Course name: " + run["display_name"] + "\n"
         txt += "Identifier: " + run["id"] + " " + run["new"] + "\n"
         txt += "New Start: " + dates["new_start_edx"] + "\n"
-        if dates["new_start_py"] < datetime.date.today():
+        if dates["new_start_py"]["date"] < datetime.date.today():
             txt += "WARNING: course starts in the past"
         txt += "New End: " + dates["new_end_edx"] + "\n"
-        if dates["new_end_py"] < datetime.date.today():
+        if dates["new_end_py"]["date"] < datetime.date.today():
             txt += "WARNING: course ends in the past"
         txt += "Pacing: " + run["pacing"] + "\n"
         txt += "\n"
@@ -758,7 +757,7 @@ def createSummary(details):
         problem_type_translator = {
             "choiceresponse": "checkbox",
             "customresponse": "custom input",
-            "optioninput": "dropdown",
+            "optionresponse": "dropdown",
             "numericalresponse": "numerical",
             "multiplechoiceresponse": "multiple-choice",
             "stringresponse": "text",
@@ -828,12 +827,12 @@ def getDates(args, details):
     dates = details["dates"]
 
     # Did we collect these from a JSON file?
-    if args.start and args.end:
-        dates["new_start_edx"] = args.start
-        dates["new_end_edx"] = args.end
+    try:
+        dates["new_start_edx"] = args.start  # Might not exist.
+        dates["new_end_edx"] = args.end  # Might not exist.
         dates["new_start_py"] = edxDateToPython(args.start)
         dates["new_end_py"] = edxDateToPython(args.end)
-    else:
+    except AttributeError:
         dates["new_start_edx"] = pythonDateToEdx(
             dates["new_start_py"], datetime.datetime.now().time()
         )
@@ -865,21 +864,24 @@ def getCommandLineArgs(args):
 
     # Read in the filename and options
     parser = argparse.ArgumentParser(usage=instructions, add_help=False)
-    parser.add_argument("tarfile", default="course.tar.gz")
-    parser.add_argument("run", default=None)
+    parser.add_argument("tarfile", default=None)
+    parser.add_argument("-r", "--run", action="store", default=None)
     parser.add_argument("-h", "--help", action="store_true")
     parser.add_argument("-d", "--dates", action="store_true")
-    parser.add_argument("-f", "--file", default=None, action="store")
+    parser.add_argument("-f", "--file", action="store", default=None)
 
     ###########################
     # TODO: Handle input from a JSON file
     # Including dates and times
     ###########################
-    # parser.add_argument("file", action="store" default="false")
 
     args = parser.parse_args()
     if args.help:
         sys.exit(instructions)
+
+    if not os.path.exists(args.tarfile):
+        sys.exit("Course export not found: " + args.tarfile)
+    args.pathname = os.path.dirname(args.tarfile)
 
     # Handle JSON file input. Specifically, in this format:
     """
@@ -891,17 +893,19 @@ def getCommandLineArgs(args):
     }
     """
     if args.file is not None:
+        print("handling JSON input")
         if not os.path.exists(args.file):
-            sys.exit("Course export not found: " + args.tarfile)
-        new_args = json.load(args.file)
-        args.tarfile = new_args["tarfile"]
-        args.run = new_args["run"]
-        args.start = new_args["start"]
-        args.end = new_args["end"]
+            sys.exit("JSON settings file not found: " + args.file)
+        with open(args.file, "r") as f:
+            new_args = json.load(f)
+            if args.tarfile is None:
+                args.tarfile = new_args["tarfile"]
+            args.run = new_args["run"]
+            args.start = new_args["start"]
+            args.end = new_args["end"]
 
-    if not os.path.exists(args.tarfile):
-        sys.exit("Course export not found: " + args.tarfile)
-    args.pathname = os.path.dirname(args.tarfile)
+    if args.run is None:
+        args.run = input("Run number (3T2077) = ")
 
     args.root_filename = "course/course.xml"
 
@@ -911,9 +915,9 @@ def getCommandLineArgs(args):
 #######################
 # Main starts here
 #######################
-def MakeNewRun():
+def MakeNewRun(argv):
 
-    args = getCommandLineArgs(sys.argv)
+    args = getCommandLineArgs(argv)
 
     # Make a copy of the tarball for backup purposes
     shutil.copy2(args.tarfile, args.tarfile[:-7] + "_backup.tar.gz")
@@ -945,7 +949,7 @@ def MakeNewRun():
     # Re-tar
     print("Creating tar.gz file... ")
     with tarfile.open(
-        details["run"]["course_nickname"] + "_" + details["run"]["new"] + ".tar.gz",
+        details["run"]["course_nickname"] + "_" + details["run"]["new"] + ".new.tar.gz",
         "w:gz",
     ) as tar:
         tar.add(
