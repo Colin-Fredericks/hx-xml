@@ -52,19 +52,13 @@ def edxDateToPython(date_string):
 
 def pythonDateToEdx(moment):
     # return will be is in edx's format: 2030-01-01T00:00:00+00:00
-
-    date_list_str = [str(x) for x in date_list]
-    date_list_full = []
-    for d in date_list_str:
-        date_list_full.append(d if len(d) > 1 else "0" + d)
-
     date_string = ""
-    date_string += moment.year + "-"
-    date_string += moment.month + "-"
-    date_string += moment.day + "T"
-    date_string += moment.hour + ":"
-    date_string += moment.minute + ":"
-    date_string += moment.second + "+"
+    date_string += str(moment.year) + "-"
+    date_string += str(moment.month) + "-"
+    date_string += str(moment.day) + "T"
+    date_string += str(moment.hour) + ":"
+    date_string += str(moment.minute) + ":"
+    date_string += str(moment.second) + "+"
     date_string += "00:00"
 
     return date_string
