@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import json
+import random
 import shutil
 import tarfile
 import argparse
@@ -16,27 +17,43 @@ python3 MakeNewRun.py coursefile.tar.gz (options)
 
 This script takes an existing course tarball and creates a new one,
 named coursefile.new.tar.gz , with hardcoded links, folders, and filenames
-updated for the new run.
+updated for the new run. Automatically prompts for new date and run, but
+you can feed it a file with -f below.
 
 Options:
   -f  Specify a JSON settings file using -f=filename. Overrides other flags.
-  -d  Prompt for new dates for start/end of course.
-  -r  Specify a run number using -r="1T2077".
   -h  Print this help message and exit.
 
-Last update: May 18th 2021
+Last update: July 20th 2021
 """
-
 
 ######################
 # Utility Functions
 ######################
+def findDictInList(lst, key, value):
+    for i, dic in enumerate(lst):
+        try:
+            if dic[key] == value:
+                return i
+        except KeyError:
+            pass
+    return -1
+
+
+# 32-character randomized hexadecimal
+def getNewEdxFilename():
+    f = ""
+    for x in range(0, 32):
+        f = f + (hex(random.randint(0, 15))[2])
+    return f
+
+
 def edxDateToPython(date_string):
     # date_string is in edx's format: 2030-01-01T00:00:00+00:00
     # sometimes ends with a Z instead of +whatever
     # split on -, T, :, Z, and +
     # Resulting list is year, month, day, 24hours, minutes, seconds, something something.
-    date_list_str = re.split("-|T|:|\+|Z", date_string)
+    date_list_str = re.split("-|/|T|:|\+|Z", date_string)
     date_list = [
         int(x.replace('"', "").replace("'", "")) for x in date_list_str if len(x) > 0
     ]
@@ -113,7 +130,8 @@ def setUpDetails(args):
             "flash_links": [],  # Any Flash?
             "top_tab_js": [],  # Any javascript that targets the top tabs?
             "iframes": [],  # Any iframes?
-            "no_solution": [],  # Problems without solutions
+            "no_solution": [],  # Problems without written explanations
+            "js_files": [],  # A list of all javascript files in /static/
         },
         "run": {
             "old": "",
@@ -191,22 +209,108 @@ def updateDetails(new_info, category, details):
 
 
 #########################
-# Update FAQ file
+# Update FAQ file and maybe other tabs
 #########################
-def updateFAQ(filename):
+
+
+def updateTabs(details):
+    run = details["run"]
+
+    # Get the data from the policy.json file for this course.
+    data = dict()
+    policy_file = os.path.join(
+        run["pathname"], "course", "policies", run["new"], "policy.json"
+    )
+    with open(policy_file, "r") as policy:
+        data = json.load(policy)
 
     faq_text = """
-<p>Please find a list of HarvardX's most commonly asked questions below. You will need to scroll to see the whole list.</p>
+<p>Course leads: Insert a link to your custom FAQ page below.</p>
 
-<iframe title="Frequently Asked Questions" style="width:100%; height:800px; overflow-y:scroll;" src="https://stage.static.vpal.harvard.edu/cdn/universal/faq.html">
+<iframe title="Frequently Asked Questions" style="width:100%; height:800px; overflow-y:scroll;" src="FAQ link goes here">
 </iframe>
 
-<p>If you can't see the question list above, click this link to <a href="https://stage.static.vpal.harvard.edu/cdn/universal/faq.html" target="_blank">open the FAQ in a new window</a>.</p>
+<p>If you can't see the question list above, click this link to <a href="FAQ link goes here" target="_blank">open the FAQ in a new window</a>.</p>
 """
 
-    # Open the old FAQ file
-    with open(filename, "w") as faq_file:
-        faq_file.write(faq_text)
+    new_faq_filename = "faq.html"
+    new_faq_file = os.path.join(run["pathname"], "course", "tabs", new_faq_filename)
+    new_faq_exists = os.path.exists(new_faq_file)
+
+    bak_faq_filename = "faq_backup.html"
+    bak_faq_file = os.path.join(run["pathname"], "course", "tabs", bak_faq_filename)
+    bak_faq_exists = os.path.exists(bak_faq_file)
+
+    # Is there already a tab that's *probably* the FAQ?
+    old_faq_exists = False
+    runpath = "course/" + run["new"]
+    if not new_faq_exists and not bak_faq_exists:
+        tabs = [x for x in data[runpath]["tabs"]]
+        faq_search = [x for x in tabs if "faq" in x["name"].lower()]
+        if len(faq_search) > 0:
+            old_faq_filename = faq_search[0]["url_slug"]
+            old_faq_file = os.path.join(
+                run["pathname"], "course", "tabs", old_faq_filename
+            )
+            old_faq_exists = os.path.exists(old_faq_file)
+            old_faq_tab = {
+                "course_staff_only": True,
+                "name": "Old FAQ file",
+                "type": "static_tab",
+                "url_slug": old_faq_filename,
+            }
+
+    new_faq_tab = {
+        "course_staff_only": False,
+        "name": "FAQ",
+        "type": "static_tab",
+        "url_slug": new_faq_filename[:-5],
+    }
+    bak_faq_tab = {
+        "course_staff_only": True,
+        "name": "FAQ Backup",
+        "type": "static_tab",
+        "url_slug": bak_faq_filename[:-5],
+    }
+
+    # If there's a faq.html file, make a backup copy of that.
+    # If not but there's an older faq file with long filename, use that as the backup.
+    # Regardless, make the current FAQ page a link to our iframed page.
+    run["faq_page"] = "added"
+    if new_faq_exists:
+        shutil.move(new_faq_file, bak_faq_file)
+        run["faq_page"] = "updated"
+    elif old_faq_exists:
+        shutil.move(old_faq_file, bak_faq_file)
+        run["faq_page"] = "updated"
+    with open(new_faq_file, "w") as f:
+        f.write(faq_text)
+
+    # If we need to add the new and backup faqs to the policy file, do that here.
+    has_new_faq = (
+        findDictInList(data[runpath]["tabs"], "url_slug", new_faq_filename[:-5]) > -1
+    )
+    has_backup_faq = (
+        findDictInList(data[runpath]["tabs"], "url_slug", bak_faq_filename[:-5]) > -1
+    )
+
+    if not has_new_faq:
+        data[runpath]["tabs"].append(new_faq_tab)
+    if not has_backup_faq:
+        data[runpath]["tabs"].append(bak_faq_tab)
+    # No need to add tab for old FAQ; that's where we found it in the first place.
+    # Just change the visibility.
+    if old_faq_exists:
+        index = findDictInList(data[runpath]["tabs"], "url_slug", old_faq_filename)
+        data[runpath]["tabs"][index]["course_staff_only"] = False
+        run["faq_page"] = "updated"
+
+    # Write the policy file and close.
+    with open(policy_file, "w") as policy:
+        policy.write(json.dumps(data, indent=4))
+
+    details = updateDetails(run, "run", details)
+    return details
 
 
 #########################
@@ -246,7 +350,7 @@ def handleBaseFiles(details):
     root.set("start", date["new_start_edx"])
     root.set("end", date["new_end_edx"])
 
-    if root.attrib["self_paced"] == "true":
+    if root.attrib.get("self_paced", False) == "true":
         run["pacing"] = "self-paced"
 
     # Write that file, done with it.
@@ -305,23 +409,8 @@ def handlePolicies(details):
 
         # Items to handle later
         run["lti_passports"] = data[runpath].get("lti_passports", [])
-        print(run["lti_passports"])
+        # print(run["lti_passports"])
         run["display_name"] = data[runpath]["display_name"]
-
-        # Update some standard tabs
-        tabs = [x for x in data[runpath]["tabs"]]
-        faq_search = [x for x in tabs if "FAQ" in x["name"]]
-        if len(faq_search) > 0:
-            updateFAQ(
-                os.path.join(
-                    pathname,
-                    "course",
-                    "tabs",
-                    faq_search[0]["url_slug"] + ".html",
-                )
-            )
-        else:
-            run["faq_page"] = "Couldn't find"
 
     with open(
         os.path.join(pathname, "course", "policies", run["new"], "policy.json"), "w"
@@ -382,10 +471,11 @@ def updateORA(child, tree, dirpath, eachfile, details):
 
     # Reviews start at course start and are due at course end.
     # Look for <assessment name="peer-assessment" ...>
-    # Assume there's only one peer-assessment tag.
+    # Assume there's only one peer-assessment tag, maybe none.
     peer_grading = child.findall(".//assessment[@name='peer-assessment']")
-    peer_grading[0].attrib["start"] = course_start
-    peer_grading[0].attrib["due"] = course_end
+    if len(peer_grading) > 0:
+        peer_grading[0].attrib["start"] = course_start
+        peer_grading[0].attrib["due"] = course_end
 
     # Close and write file.
     tree.write(
@@ -403,6 +493,7 @@ def scrapeVerticals(details):
     # Count the number of all the component types in the course.
     # Especially need: ORA, LTI, discussion
     component_count = {}
+    need_to_save = False
     # Open everything in the vertical/ folder
     for dirpath, dirnames, filenames in os.walk(
         os.path.join(details["run"]["pathname"], "course", "vertical")
@@ -422,6 +513,27 @@ def scrapeVerticals(details):
 
                 if child.tag == "openassessment":
                     updateORA(child, tree, dirpath, eachfile, details)
+
+                # Create new LTI components
+                # so that the unique component ID passed to LTI providers changes
+                if child.tag == "lti":
+                    new_lti_filename = getNewEdxFilename()
+                    new_lti_file = os.path.join(
+                        dirpath, "..", "lti", new_lti_filename + ".xml"
+                    )
+                    old_lti_file = os.path.join(
+                        dirpath, "..", "lti", child.attrib["url_name"] + ".xml"
+                    )
+                    shutil.move(old_lti_file, new_lti_file)
+                    child.attrib["url_name"] = new_lti_filename
+                    need_to_save = True
+
+            if need_to_save:
+                tree.write(
+                    os.path.join(dirpath, eachfile),
+                    encoding="UTF-8",
+                    xml_declaration=False,
+                )
 
     # Alphabetizing
     component_count_sorted = OrderedDict(sorted(component_count.items()))
@@ -492,7 +604,10 @@ def scrapeVideos(details):
 
 ################################
 # Problem scraping
+# TODO: Add check for problems with no correct answer set.
 ################################
+
+
 def scrapeProblems(details):
     # Count the number of problems of each assignment type
     # What % of content is gated?
@@ -579,7 +694,6 @@ def scrapePage(folder, filename, details):
 
     # Get the whole-file text so we can search it:
     with open(os.path.join(folder, filename), mode="r") as f:
-
         txt = f.read()
 
         if "<iframe" in txt:
@@ -601,11 +715,33 @@ def scrapePage(folder, filename, details):
         # Find all instances of course_run in links in XML and HTML files,
         # and replace them with the new one. Only write file if it changed.
         txt_runfix = txt.replace(run["old"], run["new"])
+
         if txt_runfix == txt:
             txt_runfix = False
 
         details = updateDetails(trouble, "trouble", details)
         return details, txt_runfix
+
+
+def getStaticFiles(extension, details):
+    pathname = details["run"]["pathname"]
+    trouble = {"js_files": []}
+
+    # TODO: Should probably replace this with glob for better wildcard matching.
+    for dirpath, dirnames, filenames in os.walk(
+        os.path.join(pathname, "course", "static")
+    ):
+        for f in filenames:
+            base, ext = os.path.splitext(f)
+            # Ignore files starting with ._ They're resource fork files.
+            if base[0:2] != "._":
+                if ext == "*":
+                    trouble["js_files"].append(f)
+                elif ext == extension:
+                    trouble["js_files"].append(f)
+
+    details = updateDetails(trouble, "trouble", details)
+    return details
 
 
 def scrapeFolder(folder, details):
@@ -712,7 +848,7 @@ def createSummary(details):
         txt += "Number of problems: " + str(problems["total"]) + "\n"
         txt += "Ungated problems: " + str(problems["ungated"]) + "\n"
         txt += (
-            "Problems without solutions: "
+            "Problems without written explanations: "
             + str(problems["total"] - problems["solutions"])
             + "\n"
         )
@@ -742,15 +878,17 @@ def createSummary(details):
         for troub in trouble:
             if len(trouble[troub]) > 0:
                 if troub == "no_solution":
-                    txt += "Problems without solutions:\n"
+                    txt += "\nProblems without written explanations:\n"
                 if troub == "discussion_links":
-                    txt += "Direct links to discussion boards:\n"
+                    txt += "\nDirect links to discussion boards:\n"
                 elif troub == "flash_links":
-                    txt += "Links to Flash files (.swf):\n"
+                    txt += "\nLinks to Flash files (.swf):\n"
                 elif troub == "top_tab_js":
-                    txt += "Javascript trying to access the top tab bar:\n"
+                    txt += "\nJavascript trying to access the top tab bar:\n"
                 elif troub == "iframes":
-                    txt += "Components with iframes:\n"
+                    txt += "\nComponents with iframes:\n"
+                elif troub == "js_files":
+                    txt += "\nJavascript in Files & Uploads:\n"
 
                 for l in trouble[troub]:
                     txt += str(l) + "\n"
@@ -758,17 +896,17 @@ def createSummary(details):
         txt += "\n"
         txt += "Related Courses page must be replaced by hand.\n"
         if run["faq_page"] == "":
-            txt += "Replaced FAQ page.\n"
-        else:
             txt += "Could not find FAQ page.\n"
+        else:
+            txt += "FAQ page " + run["faq_page"] + "\n"
 
         # Summarize LTI tools & keys
         txt += "\n"
-        print(run["lti_passports"])
+        # print(run["lti_passports"])
         if len(run["lti_passports"]) > 0:
             txt += "LTI tools:\n"
             for l in run["lti_passports"]:
-                txt += run["lti_passports"][0] + "\n"
+                txt += l + "\n"
         else:
             txt += "No LTI tools.\n"
 
@@ -791,13 +929,11 @@ def getCommandLineArgs(args):
     # Read in the filename and options
     parser = argparse.ArgumentParser(usage=instructions, add_help=False)
     parser.add_argument("tarfile", default=None)
-    parser.add_argument("-r", "--run", action="store", default=None)
     parser.add_argument("-h", "--help", action="store_true")
-    parser.add_argument("-d", "--dates", action="store_true")
     parser.add_argument("-f", "--file", action="store", default=None)
 
     args = parser.parse_args()
-    if args.help:
+    if args.help or args.tarfile is None:
         sys.exit(instructions)
 
     if not os.path.exists(args.tarfile):
@@ -809,8 +945,7 @@ def getCommandLineArgs(args):
     {
         "start": "2030-01-31T14:15:00+00:00",
         "end:" "2030-01-31T20:15:00+00:00",
-        "run": "1T2030",
-        "tarfile": "course_tar_file.tar.gz"
+        "run": "1T2030"
     }
     """
     if args.file is not None:
@@ -839,10 +974,14 @@ def getCommandLineArgs(args):
         end_date = input("End date (2078-02-28) = ") or "2078-02-28"
         end_time = input("End time (23:59:59) = ") or "23:59:59"
         args.end = end_date + "T" + end_time + "+00:00"
-
-    if args.run is None:
         args.run = input("Run number (1T2077) = ") or "1T2077"
 
+    # TODO: Hey, uh, what if it unzips to a folder other than "course/?
+    # Like, what if it's course (1) or course (30) or something?
+    # Can use tar.getnames()[0] to get the folder name inside the tar archive
+    #  (might need to remove ._ from filename)
+    #  and export it to something specific and helpfully named.
+    # Should probably rename previous course/ folder if there is one.
     args.root_filename = "course/course.xml"
 
     return args
@@ -873,19 +1012,29 @@ def MakeNewRun(argv):
 
     details = scrapeFolder("html", details)
     details = scrapeFolder("tabs", details)
+    details = updateTabs(details)
     details = scrapeFolder("problem", details)
     details = scrapeProblems(details)
     details = scrapeVideos(details)
+    details = getStaticFiles(".js", details)
 
     createSummary(details)
 
     # Re-tar
+    # TODO: Is there a good way to remove the ._ files first?
     print("Creating tar.gz file... ")
     with tarfile.open(
-        details["run"]["course_nickname"] + "_" + details["run"]["new"] + ".new.tar.gz",
+        os.path.join(
+            details["run"]["pathname"],
+            details["run"]["course_nickname"]
+            + "_"
+            + details["run"]["new"]
+            + ".new.tar.gz",
+        ),
         "w:gz",
     ) as tar:
         tar.add(
+            # TODO: If the folder isn't named course/, make sure to fix here.
             os.path.join(details["run"]["pathname"], "course"),
             arcname=os.path.basename(
                 os.path.join(details["run"]["pathname"], "course")
