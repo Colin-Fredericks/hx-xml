@@ -101,9 +101,10 @@ def processVideo(folder):
                     num_youtube_urls += 1
 
                 # Remove encoded_video tags with profile="youtube"
-                for tag in root.iter("encoded_video"):
-                    if tag.get("profile", False) == "youtube":
-                        child.remove(tag)
+                for child in root:
+                    for tag in child.findall("encoded_video"):
+                        if tag.get("profile", False) == "youtube":
+                            child.remove(tag)
 
                 # Increment file counter
                 num_fixed += 1
@@ -189,7 +190,7 @@ def makeReport():
             for x in videos_unsourced:
                 txt += "  " + x + "\n"
         if num_links == 0:
-            txt += "No links found to YouTube in HTML."
+            txt += "No links found to YouTube in HTML.\n"
         else:
             txt += (
                 "The following "
