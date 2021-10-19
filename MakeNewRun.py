@@ -668,6 +668,8 @@ def scrapeProblems(details):
             else:
                 trouble["no_solution"].append("problem/" + eachfile)
 
+            # TODO: Compare solutions across problems to see if there are duplicates.
+
             problems["total"] += 1
 
     num_problem_tags = 0
@@ -691,6 +693,9 @@ def scrapePage(folder, filename, details):
         "top_tab_js": [],
     }
     run = details["run"]
+
+    # TODO: Replace text scraping with HTML parser.
+    # Get word count too.
 
     # Get the whole-file text so we can search it:
     with open(os.path.join(folder, filename), mode="r") as f:
