@@ -478,6 +478,12 @@ def updateORA(child, tree, dirpath, eachfile, details):
         peer_grading[0].attrib["start"] = course_start
         peer_grading[0].attrib["due"] = course_end
 
+    # Same for self-grading components
+    s_grading = child.findall(".//assessment[@name='self-assessment']")
+    if len(s_grading) > 0:
+        s_grading[0].attrib["start"] = course_start
+        s_grading[0].attrib["due"] = course_end
+
     # Close and write file.
     tree.write(
         os.path.join(dirpath, eachfile),
