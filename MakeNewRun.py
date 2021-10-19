@@ -299,6 +299,8 @@ def updateTabs(details):
         data[runpath]["tabs"].append(new_faq_tab)
     if not has_backup_faq:
         data[runpath]["tabs"].append(bak_faq_tab)
+        with open(bak_faq_file, "w") as f:
+            f.write(faq_text)
     # No need to add tab for old FAQ; that's where we found it in the first place.
     # Just change the visibility.
     if old_faq_exists:
