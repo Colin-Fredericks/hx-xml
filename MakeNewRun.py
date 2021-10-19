@@ -24,7 +24,7 @@ Options:
   -f  Specify a JSON settings file using -f=filename. Overrides other flags.
   -h  Print this help message and exit.
 
-Last update: Aug 3rd 2021
+Last update: Oct 19th 2021
 """
 
 ######################
@@ -981,10 +981,10 @@ def getCommandLineArgs(args):
         # Get dates from user input
         print("Please input the start dates and times:")
         start_date = input("Start date (2077-01-31) = ") or "2077-01-31"
-        start_time = input("Start time (15:00:00) = ") or "15:00:00"
+        start_time = input("Start time in UTC (15:00:00) = ") or "15:00:00"
         args.start = start_date + "T" + start_time + "+00:00"
         end_date = input("End date (2078-02-28) = ") or "2078-02-28"
-        end_time = input("End time (23:59:59) = ") or "23:59:59"
+        end_time = input("End time in UTC (23:59:59) = ") or "23:59:59"
         args.end = end_date + "T" + end_time + "+00:00"
         args.run = input("Run number (1T2077) = ") or "1T2077"
 
