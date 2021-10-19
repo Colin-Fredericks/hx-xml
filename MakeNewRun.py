@@ -24,7 +24,7 @@ Options:
   -f  Specify a JSON settings file using -f=filename. Overrides other flags.
   -h  Print this help message and exit.
 
-Last update: July 20th 2021
+Last update: Aug 3rd 2021
 """
 
 ######################
@@ -130,6 +130,7 @@ def setUpDetails(args):
             "flash_links": [],  # Any Flash?
             "top_tab_js": [],  # Any javascript that targets the top tabs?
             "iframes": [],  # Any iframes?
+            "youtube_links": [],  # Links or iframes that point to YouTube
             "no_solution": [],  # Problems without written explanations
             "js_files": [],  # A list of all javascript files in /static/
         },
@@ -547,7 +548,7 @@ def scrapeVerticals(details):
 # Video scraping
 ################################
 def scrapeVideos(details):
-    # Are any videos still pointing to YouTube?
+    # TODO: Remove all references to YouTube in our videos.
     # What % of videos are downloadable?
 
     videos = {
@@ -606,8 +607,6 @@ def scrapeVideos(details):
 # Problem scraping
 # TODO: Add check for problems with no correct answer set.
 ################################
-
-
 def scrapeProblems(details):
     # Count the number of problems of each assignment type
     # What % of content is gated?
@@ -668,8 +667,6 @@ def scrapeProblems(details):
             else:
                 trouble["no_solution"].append("problem/" + eachfile)
 
-            # TODO: Compare solutions across problems to see if there are duplicates.
-
             problems["total"] += 1
 
     num_problem_tags = 0
@@ -691,11 +688,9 @@ def scrapePage(folder, filename, details):
         "flash_links": [],
         "discussion_links": [],
         "top_tab_js": [],
+        "youtube_links": [],
     }
     run = details["run"]
-
-    # TODO: Replace text scraping with HTML parser.
-    # Get word count too.
 
     # Get the whole-file text so we can search it:
     with open(os.path.join(folder, filename), mode="r") as f:
@@ -703,6 +698,8 @@ def scrapePage(folder, filename, details):
 
         if "<iframe" in txt:
             trouble["iframes"].append(folder + "/" + filename)
+        if "youtube.com" in txt or "youtu.be" in txt:
+            trouble["youtube_links"].append(folder + "/" + filename)
         if ".swf" in txt:
             trouble["flash_links"].append(folder + "/" + filename)
         if "/discusison/forum" in txt:
@@ -894,6 +891,8 @@ def createSummary(details):
                     txt += "\nComponents with iframes:\n"
                 elif troub == "js_files":
                     txt += "\nJavascript in Files & Uploads:\n"
+                elif troub == "youtube_links":
+                    txt += "\nReferences to YouTube, usually links or iframes:\n"
 
                 for l in trouble[troub]:
                     txt += str(l) + "\n"
@@ -923,7 +922,7 @@ def createSummary(details):
 
     # Anything else?
 
-    # Post or e-mail this somewhere so we keep a record.
+    # TODO: Post or e-mail this somewhere so we keep a record.
 
 
 #########################
