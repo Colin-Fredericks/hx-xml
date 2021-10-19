@@ -6,7 +6,7 @@ if sys.version_info <= (3, 0):
 import os
 import argparse
 import glob
-from markdownify import markdownify
+from markdownify import markdownify as mdfy
 
 instructions = """
 To use:
@@ -82,7 +82,7 @@ def Convert_To_Markdown(args=["-h"]):
             # Get its contents
             html = f.read()
             # Convert it to markdown
-            md = markdownify(html)
+            md = mdfy(html)
             # Save the new file in the folder.
             new_file = open(
                 os.path.join(html_folder, "markdown", os.path.basename(new_name)), "w"
