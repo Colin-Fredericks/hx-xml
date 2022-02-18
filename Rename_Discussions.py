@@ -14,24 +14,14 @@ To use:
 python3 Rename_Discussions.py path/to/course.xml (options)
 
 Run this on a course folder, or a course.xml file inside an edX course folder (from export).
-You will get a Tab-Separated Value file that you should open with Google Drive,
-which shows the location of each video and the srt filename for that video.
+The discussion components will automatically have their category and
+subcategory set using the section, subsection, and unit names for the course.
 
-You can specify the following options:
-    -problems  Includes problems AND problem XML instead of videos
-    -html      Includes just HTML components
-    -video     Forces inclusion of video with html or problems
-    -all       Includes most components, including problem,
-               html, video, discussion, poll, etc.
-    -links     Lists all links in the course.
-               Not compatible with above options.
-    -alttext   Lists all images with their alt text.
-               Not compatible with above options.
-    -o         Sets the output filename to the next argument.
+There are currently no options. This script may fail on courses where
+the discussion components are in their own folder instead of
+inline in the verticals.
 
-This script may fail on courses with empty containers.
-
-Last update: July 15th 2021
+Last update: Feb 17th 2022
 """
 
 
@@ -55,7 +45,6 @@ canon_leaf = {"type": "", "name": "", "url": "", "links": [], "images": [], "sub
 
 
 # Always gets the display name.
-# For video and problem files, gets other info too
 def getComponentInfo(folder, filename, child, parentage, args):
 
     # Try to open file.
@@ -220,7 +209,6 @@ def getXMLInfo(folder, root, parentage, args):
         elif child.tag in leaf_nodes:
             child_info = getComponentInfo(nextFile, temp["url"], child, parentage, args)
             # Looking for discussions that need to get fixed.
-            # If we found one, fix its info.
             if child.tag == "discussion":
                 has_discussion = True
             # For leaf nodes, add item info to the dict
@@ -260,13 +248,6 @@ def Rename_Discussions(args=["-h"]):
     # Handle arguments and flags
     parser = argparse.ArgumentParser(usage=instructions, add_help=False)
     parser.add_argument("--help", "-h", action="store_true")
-    parser.add_argument("-all", action="store_true")
-    parser.add_argument("-problems", action="store_true")
-    parser.add_argument("-html", action="store_true")
-    parser.add_argument("-video", default=True, action="store_true")
-    parser.add_argument("-links", action="store_true")
-    parser.add_argument("-alttext", action="store_true")
-    parser.add_argument("-o", action="store")
     parser.add_argument("file_names", nargs="*")
 
     # "extra" will help us deal with out-of-order arguments.
@@ -277,20 +258,6 @@ def Rename_Discussions(args=["-h"]):
 
     if args.help:
         sys.exit(instructions)
-
-    # Do video by default. Don't do it when we're doing other stuff,
-    # unless someone intentionally turned it on.
-    if not args.video:
-        if args.problems or args.html or args.all or args.links or args.alttext:
-            args.video = False
-
-    # Link lister is not compatible with other options,
-    # mostly because it makes for too big a spreadsheet.
-    # Ditto for the alt text option.
-    if args.links:
-        args.problems = args.html = args.all = args.video = args.alttext = False
-    elif args.alttext:
-        args.problems = args.html = args.all = args.video = args.links = False
 
     # Replace arguments with wildcards with their expansion.
     # If a string does not contain a wildcard, glob will return it as is.
@@ -348,11 +315,6 @@ def Rename_Discussions(args=["-h"]):
         )
         course_dict["name"] = course_info["parent_name"]
         course_dict["contents"] = course_info["contents"]
-
-        if args.links:
-            course_dict["contents"].extend(getAuxLinks(rootFileDir))
-        if args.alttext:
-            course_dict["contents"].extend(getAuxAltText(rootFileDir))
 
 
 if __name__ == "__main__":
