@@ -6,7 +6,6 @@ if sys.version_info <= (3, 0):
 import os
 import glob
 import argparse
-from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
 
 instructions = """
@@ -21,27 +20,8 @@ There are currently no options. This script may fail on courses where
 the discussion components are in their own folder instead of
 inline in the verticals.
 
-Last update: Feb 17th 2022
+Last update: Feb 22nd 2022
 """
-
-
-# Many of these are being skipped because they're currently expressed in inline XML
-# rather than having their own unique folder in the course export.
-# These will be moved out as we improve the parsing.
-skip_tags = [
-    "annotatable",  # This is the older, deprecated annotation component.
-    "google-document",
-    "oppia",
-    "openassessment",  # This is the older, deprecated ORA.
-    "poll_question",  # This is the older, deprecated poll component.
-    "problem-builder",
-    "recommender",
-    "step-builder",
-    "wiki",
-]
-
-# Canonical leaf node. Only for copying.
-canon_leaf = {"type": "", "name": "", "url": "", "links": [], "images": [], "sub": []}
 
 
 # Always gets the display name.
@@ -49,7 +29,7 @@ def getComponentInfo(folder, filename, child, parentage, args):
 
     # Try to open file.
     try:
-        tree = ET.parse(folder + "/" + filename + ".xml")
+        tree = ET.parse(os.path.join(folder, filename + ".xml"))
         root = tree.getroot()
     except OSError:
         # If we can't get a file, try to traverse inline XML.
@@ -74,9 +54,9 @@ def getComponentInfo(folder, filename, child, parentage, args):
     if root.tag == "discussion":
         # Remove the attributes if they exist.
         if "discussion_category" in root.attrib:
-            delete
+            del root.attrib["discussion_category"]
         if "discussion_target" in root.attrib:
-            delete
+            del root.attrib["discussion_target"]
         # Add the attributes
         root.attrib["discussion_category"] = (
             parentage["section"] + ": " + parentage["subsection"]
@@ -112,8 +92,6 @@ def drillDown(folder, filename, root, parentage, args):
 
     # Rewrite all verticals that have discussion components.
     if XMLInfo["has_discussion"]:
-        print(root[-1].attrib)
-        print(filename)
         tree.write(
             os.path.join(folder, (filename + ".xml")),
             encoding="utf-8",
@@ -125,27 +103,8 @@ def drillDown(folder, filename, root, parentage, args):
 
 def getXMLInfo(folder, root, parentage, args):
 
-    # We need lists of container nodes and leaf nodes so we can tell
+    # We need lists of container nodes so we can tell
     # whether we have to do more recursion.
-    leaf_nodes = [
-        "discussion",
-        "done",
-        "drag-and-drop-v2",
-        "html",
-        "imageannotation",
-        "library_content",
-        "lti",
-        "lti_consumer",
-        "pb-dashboard",  # This is currently unique to HarvardX DataWise
-        "poll",
-        "problem",
-        "survey",
-        "textannotation",
-        "ubcpi",
-        "video",
-        "videoannotation",
-        "word_cloud",
-    ]
     branch_nodes = [
         "course",
         "chapter",
@@ -201,12 +160,15 @@ def getXMLInfo(folder, root, parentage, args):
         else:
             temp["url"] = None
 
-        # In the future: check to see whether this child is a pointer tag or inline XML.
         nextFile = os.path.join(os.path.dirname(folder), child.tag)
-        if child.tag in branch_nodes:
+        # Some tags trip us up. Add them here so we can skip them.
+        if child.tag in ["wiki"]:
+            child_info = {"contents": False, "parent_name": child.tag}
+            del temp["contents"]
+        elif child.tag in branch_nodes:
             child_info = drillDown(nextFile, temp["url"], child, parentage, args)
             temp["contents"] = child_info["contents"]
-        elif child.tag in leaf_nodes:
+        else:
             child_info = getComponentInfo(nextFile, temp["url"], child, parentage, args)
             # Looking for discussions that need to get fixed.
             if child.tag == "discussion":
@@ -215,11 +177,6 @@ def getXMLInfo(folder, root, parentage, args):
             # instead of adding a new contents entry
             temp.update(child_info["contents"])
             del temp["contents"]
-        elif child.tag in skip_tags:
-            child_info = {"contents": False, "parent_name": child.tag}
-            del temp["contents"]
-        else:
-            sys.exit("New tag type found: " + child.tag)
 
         # If the display name was temporary, replace it.
         if "tempname" in temp:
@@ -241,9 +198,7 @@ def getXMLInfo(folder, root, parentage, args):
 
 
 # Main function
-def Rename_Discussions(args=["-h"]):
-
-    print("Creating course sheet")
+def RenameDiscussions(args=["-h"]):
 
     # Handle arguments and flags
     parser = argparse.ArgumentParser(usage=instructions, add_help=False)
@@ -252,9 +207,6 @@ def Rename_Discussions(args=["-h"]):
 
     # "extra" will help us deal with out-of-order arguments.
     args, extra = parser.parse_known_args(args)
-
-    print("Arguments:")
-    print(args, extra)
 
     if args.help:
         sys.exit(instructions)
@@ -313,12 +265,10 @@ def Rename_Discussions(args=["-h"]):
             parentage,
             args,
         )
-        course_dict["name"] = course_info["parent_name"]
-        course_dict["contents"] = course_info["contents"]
 
-        print("Updated discussion names in " + course_dict["name"])
+        print("Updated discussion names in " + course_info["parent_name"])
 
 
 if __name__ == "__main__":
     # this won't be run when imported
-    Rename_Discussions(sys.argv)
+    RenameDiscussions(sys.argv)
