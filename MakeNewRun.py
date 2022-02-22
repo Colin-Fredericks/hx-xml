@@ -780,6 +780,20 @@ def scrapeFolder(folder, details):
 
 
 ################################
+# Take anything in the file_replacements folder
+# and overwrite what's in Files & Uploads with them.
+################################
+def replaceFiles(details):
+    # Open the folder and step through all the files.
+    if os.path.exists("file_replacements"):
+        for dirpath, dirnames, filenames in os.walk("file_replacements"):
+            shutil.copy2(
+                filenames, os.path.join(details["run"]["pathname"], "file_replacements")
+            )
+            print("updated file: " + filenames)
+
+
+################################
 # High-level summary
 ################################
 def createSummary(details):
@@ -924,6 +938,8 @@ def createSummary(details):
 
         txt += "\n"
         txt += "Discussion blackout dates removed."
+        txt += "\n"
+        txt += "Files & Uploads updated from file_replacements/."
 
         print(txt)
         summary.write(txt)
@@ -1029,6 +1045,8 @@ def MakeNewRun(argv):
     details = scrapeProblems(details)
     details = scrapeVideos(details)
     details = getStaticFiles(".js", details)
+
+    replaceFiles(details)
 
     createSummary(details)
 
