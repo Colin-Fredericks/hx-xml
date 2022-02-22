@@ -316,6 +316,8 @@ def Rename_Discussions(args=["-h"]):
         course_dict["name"] = course_info["parent_name"]
         course_dict["contents"] = course_info["contents"]
 
+        print("Updated discussion names in " + course_dict["name"])
+
 
 if __name__ == "__main__":
     # this won't be run when imported
