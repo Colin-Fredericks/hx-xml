@@ -20,11 +20,14 @@ named coursefile.new.tar.gz , with hardcoded links, folders, and filenames
 updated for the new run. Automatically prompts for new date and run, but
 you can feed it a file with -f below.
 
+Auto-copies files from script_directory/file_replacements/ into
+the /static/ folder, overwriting any existing versions.
+
 Options:
   -f  Specify a JSON settings file using -f=filename. Overrides other flags.
   -h  Print this help message and exit.
 
-Last update: Oct 19th 2021
+Last update: Feb 22nd, 2022
 """
 
 ######################
@@ -133,6 +136,7 @@ def setUpDetails(args):
             "youtube_links": [],  # Links or iframes that point to YouTube
             "no_solution": [],  # Problems without written explanations
             "js_files": [],  # A list of all javascript files in /static/
+            "replaced_files": [],  # A list of all the files we auto-replaced.
         },
         "run": {
             "old": "",
@@ -782,15 +786,24 @@ def scrapeFolder(folder, details):
 ################################
 # Take anything in the file_replacements folder
 # and overwrite what's in Files & Uploads with them.
+# Currently, file_replacements should be in the script's directory.
+# Possible todo for future is making that a command-line argument.
 ################################
 def replaceFiles(details):
-    # Open the folder and step through all the files.
-    if os.path.exists("file_replacements"):
-        for dirpath, dirnames, filenames in os.walk("file_replacements"):
-            shutil.copy2(
-                filenames, os.path.join(details["run"]["pathname"], "file_replacements")
-            )
-            print("updated file: " + filenames)
+    trouble = details["trouble"]
+    # Open the replacement folder and step through all the files.
+    replacement_folder = os.path.join(sys.path[0], "file_replacements")
+    if os.path.exists(replacement_folder):
+        for dirpath, dirnames, filenames in os.walk(replacement_folder):
+            for f in filenames:
+                shutil.copy2(
+                    os.path.join(dirpath, f),
+                    os.path.join(details["run"]["pathname"], "course", "static", f),
+                )
+                trouble["replaced_files"].append(f)
+
+    details = updateDetails(trouble, "trouble", details)
+    return details
 
 
 ################################
@@ -937,9 +950,9 @@ def createSummary(details):
             txt += "No LTI tools.\n"
 
         txt += "\n"
-        txt += "Discussion blackout dates removed."
+        txt += str(len(trouble["replaced_files"])) + " updates to Files & Uploads."
         txt += "\n"
-        txt += "Files & Uploads updated from file_replacements/."
+        txt += "Discussion blackout dates removed."
 
         print(txt)
         summary.write(txt)
@@ -1046,7 +1059,7 @@ def MakeNewRun(argv):
     details = scrapeVideos(details)
     details = getStaticFiles(".js", details)
 
-    replaceFiles(details)
+    details = replaceFiles(details)
 
     createSummary(details)
 
