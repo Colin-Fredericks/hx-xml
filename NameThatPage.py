@@ -6,7 +6,7 @@ if sys.version_info <= (3, 0):
 import os
 import glob
 import argparse
-import xml.etree.ElementTree as ET
+from lxml import etree as ET
 
 instructions = """
 To use:
@@ -18,50 +18,6 @@ to do XML things.
 
 """
 
-
-# Always gets the display name.
-def getComponentInfo(folder, filename, child, parentage, args):
-
-    # Try to open file.
-    try:
-        tree = ET.parse(os.path.join(folder, filename + ".xml"))
-        root = tree.getroot()
-    except OSError:
-        # If we can't get a file, try to traverse inline XML.
-        root = child
-
-    # Note: edX does discussions inline in the vertical xml by default.
-    # Need to remove any discussion_category and discussion_target attributes
-    # and replace them with section and subsection, respectively.
-
-    temp = {
-        "type": root.tag,
-        "name": "",
-        # space for other info
-    }
-
-    # get display_name or use placeholder
-    if "display_name" in root.attrib:
-        temp["name"] = root.attrib["display_name"]
-    else:
-        temp["name"] = root.tag
-
-    if root.tag == "discussion":
-        # Remove the attributes if they exist.
-        if "discussion_category" in root.attrib:
-            del root.attrib["discussion_category"]
-        if "discussion_target" in root.attrib:
-            del root.attrib["discussion_target"]
-        # Add the attributes
-        root.attrib["discussion_category"] = (
-            parentage["section"] + ": " + parentage["subsection"]
-        )
-        root.attrib["discussion_target"] = parentage["page"]
-
-    # Label all of them as components regardless of type.
-    temp["component"] = temp["name"]
-
-    return {"contents": temp, "parent_name": temp["name"], "childroot": root}
 
 
 # Recursion function for outline-declared xml files
@@ -85,13 +41,25 @@ def drillDown(folder, filename, root, parentage, args):
 
     XMLInfo = getXMLInfo(folder, root, parentage, args)
 
-    # Rewrite all verticals that have discussion components.
-    if XMLInfo["has_discussion"]:
-        tree.write(
-            os.path.join(folder, (filename + ".xml")),
-            encoding="utf-8",
-            xml_declaration=False,
-        )
+    # Add comments to every container.
+    root.insert(
+        0,
+        ET.Comment(
+            "Section: "
+            + parentage["section"]
+            + ", Subsection: "
+            + parentage["subsection"]
+            + ", Page: "
+            + parentage["page"]
+        ),
+    )
+
+    tree.write(
+        os.path.join(folder, (filename + ".xml")),
+        encoding="utf-8",
+        xml_declaration=False,
+        pretty_print=True,
+    )
 
     return XMLInfo
 
@@ -160,22 +128,12 @@ def getXMLInfo(folder, root, parentage, args):
         if child.tag in ["wiki"]:
             child_info = {"contents": False, "parent_name": child.tag}
             del temp["contents"]
-        elif child.tag in ["vertical"]:
-            # Write a comment with the vertical's location in the course.
-            root.insert(
-                0,
-                ET.Comment(
-                    "Section: "
-                    + parentage["section"]
-                    + ", Subsection: "
-                    + parentage["subsection"]
-                    + ", Page: "
-                    + parentage["page"]
-                ),
-            )
-        else:
-            # If we're not at the "vertical" level, recurse.
+        elif child.tag in branch_nodes:
             child_info = drillDown(nextFile, temp["url"], child, parentage, args)
+            temp["contents"] = child_info["contents"]
+        else:
+            child_info = {"contents": False, "parent_name": temp["name"]}
+            del temp["contents"]
 
         # If the display name was temporary, replace it.
         if "tempname" in temp:
@@ -265,7 +223,7 @@ def NameThatPage(args=["-h"]):
             args,
         )
 
-        print("Added comments to all verticals in " + course_info["parent_name"])
+        print("Updated discussion names in " + course_info["parent_name"])
 
 
 if __name__ == "__main__":
