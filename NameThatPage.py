@@ -113,7 +113,7 @@ def getXMLInfo(folder, root, parentage, args):
         if "display_name" in child.attrib:
             temp["name"] = child.attrib["display_name"]
         else:
-            temp["name"] = child.tag + str(index)
+            temp["name"] = str(child.tag) + str(index)
             temp["tempname"] = True
 
         # get url_name but there are no placeholders
@@ -123,7 +123,7 @@ def getXMLInfo(folder, root, parentage, args):
         else:
             temp["url"] = None
 
-        nextFile = os.path.join(os.path.dirname(folder), child.tag)
+        nextFile = os.path.join(os.path.dirname(folder), str(child.tag))
         # Some tags trip us up. Add them here so we can skip them.
         if child.tag in ["wiki"]:
             child_info = {"contents": False, "parent_name": child.tag}
