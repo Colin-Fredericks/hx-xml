@@ -163,7 +163,7 @@ def getXMLInfo(folder, root, parentage, args):
         elif child.tag in ["vertical"]:
             # Write a comment with the vertical's location in the course.
             root.insert(
-                1,
+                0,
                 ET.Comment(
                     "Section: "
                     + parentage["section"]
