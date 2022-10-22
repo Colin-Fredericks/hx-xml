@@ -160,18 +160,22 @@ def getXMLInfo(folder, root, parentage, args):
         if child.tag in ["wiki"]:
             child_info = {"contents": False, "parent_name": child.tag}
             del temp["contents"]
-        elif child.tag in branch_nodes:
-            child_info = drillDown(nextFile, temp["url"], child, parentage, args)
-            temp["contents"] = child_info["contents"]
+        elif child.tag in ["vertical"]:
+            # Write a comment with the vertical's location in the course.
+            root.insert(
+                1,
+                ET.Comment(
+                    "Section: "
+                    + parentage["section"]
+                    + ", Subsection: "
+                    + parentage["subsection"]
+                    + ", Page: "
+                    + parentage["page"]
+                ),
+            )
         else:
-            child_info = getComponentInfo(nextFile, temp["url"], child, parentage, args)
-            # Looking for discussions that need to get fixed.
-            if child.tag == "discussion":
-                has_discussion = True
-            # For leaf nodes, add item info to the dict
-            # instead of adding a new contents entry
-            temp.update(child_info["contents"])
-            del temp["contents"]
+            # If we're not at the "vertical" level, recurse.
+            child_info = drillDown(nextFile, temp["url"], child, parentage, args)
 
         # If the display name was temporary, replace it.
         if "tempname" in temp:
@@ -193,7 +197,7 @@ def getXMLInfo(folder, root, parentage, args):
 
 
 # Main function
-def RenameDiscussions(args=["-h"]):
+def NameThatPage(args=["-h"]):
 
     # Handle arguments and flags
     parser = argparse.ArgumentParser(usage=instructions, add_help=False)
@@ -261,9 +265,9 @@ def RenameDiscussions(args=["-h"]):
             args,
         )
 
-        print("Updated discussion names in " + course_info["parent_name"])
+        print("Added comments to all verticals in " + course_info["parent_name"])
 
 
 if __name__ == "__main__":
     # this won't be run when imported
-    RenameDiscussions(sys.argv)
+    NameThatPage(sys.argv)
