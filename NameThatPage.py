@@ -41,18 +41,23 @@ def drillDown(folder, filename, root, parentage, args):
 
     XMLInfo = getXMLInfo(folder, root, parentage, args)
 
-    # Add comments to every container.
-    root.insert(
-        0,
-        ET.Comment(
-            "Section: "
-            + parentage["section"]
-            + ", Subsection: "
-            + parentage["subsection"]
-            + ", Page: "
-            + parentage["page"]
-        ),
-    )
+    # Remove any existing XML comments.
+    for comment in root.xpath("//comment()"):
+        if "LOCATION: " in comment.text:
+            comment.getparent().remove(comment)
+
+    # Add location comments to every container.
+    location_comment = "LOCATION: "
+    if root.tag in ['section','sequential', 'vertical']:
+        location_comment = location_comment + "\n    Section: " + parentage["section"]
+    if root.tag in ['vertical', 'sequential']:
+        location_comment = location_comment + "\n    Subsection: " + parentage["subsection"]
+    if root.tag in ['vertical']:
+        location_comment = location_comment + "\n    Unit: " + parentage["page"]
+
+    c = ET.Comment(location_comment)
+    c.tail='\n'
+    root.insert(0, c)
 
     tree.write(
         os.path.join(folder, (filename + ".xml")),
@@ -223,7 +228,7 @@ def NameThatPage(args=["-h"]):
             args,
         )
 
-        print("Updated discussion names in " + course_info["parent_name"])
+        print("Added container locations to " + course_info["parent_name"])
 
 
 if __name__ == "__main__":
