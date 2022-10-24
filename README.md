@@ -3,7 +3,10 @@
 
 This is a bunch of batch tools to work directly with a course export (the file structure, not the tarball) or with .srt files. You can run `python3 filename.py` for each one to have it show a set of instructions, or just open the code with a text editor - the instructions are the first thing there.
 
-* `YouTube_Remediation.py` take all the videos in a course and strips out the YouTube URL, forcing them to rely on the other listed source. It only does that if there _is_ another listed source. It also reports iframes and links to YouTube for further investigation.
+* `NameThatPage.py` adds an XML comment in every chapter, sequential, and vertical file to indicate its location in the course.
+* `md2edx.py` and `edx2md.py` are intended to help with transcription. Run one to take the files from the HTML folder and turn them into markdown files. Run the other on markdown files to make HTML.
+* `WordCount.py` is a transcription planning tool. It attempts to give a reasonable word count for the entire course. Must be run after `edx2html`. Not a really carefully-polished script.
+* `YouTube_Remediation.py` takes all the videos in a course and strips out the YouTube URL, forcing them to rely on the other listed source. It only does that if there _is_ another listed source. It also reports iframes and links to YouTube for further investigation.
 * `MakeNewRun.py`, which _does_ work directly on the course tarball. It extracts the course, gets a bunch of info, adjusts the run number, saves the info to a file, and rezips the course for upload to a new shell.
 * `SetMaxAttempts.py`, which sets the number of attempts automatically in every problem in a course.
     * `SetMaxAttemptsIfGraded.py`, just like the last one but only works on problems with a non-zero weight.
