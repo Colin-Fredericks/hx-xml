@@ -6,7 +6,7 @@ if sys.version_info <= (3, 0):
 import os
 import glob
 import argparse
-import xml.etree.ElementTree as ET
+from lxml import etree as ET
 
 instructions = """
 To use:
@@ -18,50 +18,6 @@ to do XML things.
 
 """
 
-
-# Always gets the display name.
-def getComponentInfo(folder, filename, child, parentage, args):
-
-    # Try to open file.
-    try:
-        tree = ET.parse(os.path.join(folder, filename + ".xml"))
-        root = tree.getroot()
-    except OSError:
-        # If we can't get a file, try to traverse inline XML.
-        root = child
-
-    # Note: edX does discussions inline in the vertical xml by default.
-    # Need to remove any discussion_category and discussion_target attributes
-    # and replace them with section and subsection, respectively.
-
-    temp = {
-        "type": root.tag,
-        "name": "",
-        # space for other info
-    }
-
-    # get display_name or use placeholder
-    if "display_name" in root.attrib:
-        temp["name"] = root.attrib["display_name"]
-    else:
-        temp["name"] = root.tag
-
-    if root.tag == "discussion":
-        # Remove the attributes if they exist.
-        if "discussion_category" in root.attrib:
-            del root.attrib["discussion_category"]
-        if "discussion_target" in root.attrib:
-            del root.attrib["discussion_target"]
-        # Add the attributes
-        root.attrib["discussion_category"] = (
-            parentage["section"] + ": " + parentage["subsection"]
-        )
-        root.attrib["discussion_target"] = parentage["page"]
-
-    # Label all of them as components regardless of type.
-    temp["component"] = temp["name"]
-
-    return {"contents": temp, "parent_name": temp["name"], "childroot": root}
 
 
 # Recursion function for outline-declared xml files
@@ -85,13 +41,30 @@ def drillDown(folder, filename, root, parentage, args):
 
     XMLInfo = getXMLInfo(folder, root, parentage, args)
 
-    # Rewrite all verticals that have discussion components.
-    if XMLInfo["has_discussion"]:
-        tree.write(
-            os.path.join(folder, (filename + ".xml")),
-            encoding="utf-8",
-            xml_declaration=False,
-        )
+    # Remove any existing XML comments.
+    for comment in root.xpath("//comment()"):
+        if "LOCATION: " in comment.text:
+            comment.getparent().remove(comment)
+
+    # Add location comments to every container.
+    location_comment = "LOCATION: "
+    if root.tag in ['section','sequential', 'vertical']:
+        location_comment = location_comment + "\n    Section: " + parentage["section"]
+    if root.tag in ['vertical', 'sequential']:
+        location_comment = location_comment + "\n    Subsection: " + parentage["subsection"]
+    if root.tag in ['vertical']:
+        location_comment = location_comment + "\n    Unit: " + parentage["page"]
+
+    c = ET.Comment(location_comment)
+    c.tail='\n'
+    root.insert(0, c)
+
+    tree.write(
+        os.path.join(folder, (filename + ".xml")),
+        encoding="utf-8",
+        xml_declaration=False,
+        pretty_print=True,
+    )
 
     return XMLInfo
 
@@ -145,7 +118,7 @@ def getXMLInfo(folder, root, parentage, args):
         if "display_name" in child.attrib:
             temp["name"] = child.attrib["display_name"]
         else:
-            temp["name"] = child.tag + str(index)
+            temp["name"] = str(child.tag) + str(index)
             temp["tempname"] = True
 
         # get url_name but there are no placeholders
@@ -155,7 +128,7 @@ def getXMLInfo(folder, root, parentage, args):
         else:
             temp["url"] = None
 
-        nextFile = os.path.join(os.path.dirname(folder), child.tag)
+        nextFile = os.path.join(os.path.dirname(folder), str(child.tag))
         # Some tags trip us up. Add them here so we can skip them.
         if child.tag in ["wiki"]:
             child_info = {"contents": False, "parent_name": child.tag}
@@ -164,13 +137,7 @@ def getXMLInfo(folder, root, parentage, args):
             child_info = drillDown(nextFile, temp["url"], child, parentage, args)
             temp["contents"] = child_info["contents"]
         else:
-            child_info = getComponentInfo(nextFile, temp["url"], child, parentage, args)
-            # Looking for discussions that need to get fixed.
-            if child.tag == "discussion":
-                has_discussion = True
-            # For leaf nodes, add item info to the dict
-            # instead of adding a new contents entry
-            temp.update(child_info["contents"])
+            child_info = {"contents": False, "parent_name": temp["name"]}
             del temp["contents"]
 
         # If the display name was temporary, replace it.
@@ -193,7 +160,7 @@ def getXMLInfo(folder, root, parentage, args):
 
 
 # Main function
-def RenameDiscussions(args=["-h"]):
+def NameThatPage(args=["-h"]):
 
     # Handle arguments and flags
     parser = argparse.ArgumentParser(usage=instructions, add_help=False)
@@ -261,9 +228,9 @@ def RenameDiscussions(args=["-h"]):
             args,
         )
 
-        print("Updated discussion names in " + course_info["parent_name"])
+        print("Added container locations to " + course_info["parent_name"])
 
 
 if __name__ == "__main__":
     # this won't be run when imported
-    RenameDiscussions(sys.argv)
+    NameThatPage(sys.argv)
