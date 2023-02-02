@@ -1,8 +1,8 @@
 #! usr/bin/env python3
 ##########################################
 # Static file sorter for edX
-# This script sorts the files in static/ 
-# into two folders based on whether or 
+# This script sorts the files in static/
+# into two folders based on whether or
 # not they are used in the course.
 ##########################################
 
@@ -10,6 +10,77 @@ import os
 import sys
 import bs4
 import glob
+
+# List of extensions that are likely to be used in course files.
+# This is so we don't accidentally flag javascript code as files.
+# We're only using this for the JSON, and JS files.
+extensions = [
+    "7z",
+    "apk",
+    "bin",
+    "bz2",
+    "c",
+    "cpp",
+    "css",
+    "csv",
+    "deb",
+    "dmg",
+    "doc",
+    "docx",
+    "eot",
+    "exe",
+    "gif",
+    "gz",
+    "h",
+    "hpp",
+    "htm",
+    "html",
+    "ico",
+    "iso",
+    "jar",
+    "java",
+    "jpeg",
+    "jpg",
+    "js",
+    "json",
+    "m",
+    "mat",
+    "md",
+    "mp3",
+    "mp4",
+    "msi",
+    "ogg",
+    "otf",
+    "pdf",
+    "pkg",
+    "png",
+    "ppt",
+    "pptx",
+    "py",
+    "r",
+    "rar",
+    "rtf",
+    "rpm",
+    "rst",
+    "sjson",
+    "srt",
+    "svg",
+    "tar",
+    "tsv",
+    "ttf",
+    "txt",
+    "wav",
+    "webm",
+    "webp",
+    "woff",
+    "woff2",
+    "xls",
+    "xml",
+    "xmlx",
+    "xz",
+    "zip",
+]
+
 
 def formatByteSize(size: int):
     """
@@ -21,6 +92,7 @@ def formatByteSize(size: int):
         return str(round(size / 1024, 2)) + " KB"
     else:
         return str(round(size / 1048576, 2)) + " MB"
+
 
 def getFilesFromHTML(html_file: str):
     """
@@ -38,7 +110,7 @@ def getFilesFromHTML(html_file: str):
     # Get the HTML file. We're assuming utf-8 encoding.
     with open(html_file, "r", encoding="utf-8") as f:
         html = f.read()
-    
+
     # Parse the HTML file
     soup = bs4.BeautifulSoup(html, "html.parser")
 
@@ -54,7 +126,10 @@ def getFilesFromHTML(html_file: str):
     # - Scripts and style sheets that point to the /static/ folder
     # - Manifests and such from annotation tools
     # - The spreadsheets from Timeline.js will have images in /static/
-    
+
+    # If we're linking to static files outside of the /static/ folder,
+    # that's a problem. We should track that.
+
     pass
 
 
@@ -87,11 +162,14 @@ def getFilesFromJSON(json_file: str):
         list: A list of files used in the JSON file.
     """
 
-    # Here we may have to just look for "anything that seems like a filename"
+    # Here we may have to just look for "anything that seems like a filename".
+    # Use the extension list to filter out things that aren't files.
     pass
+
 
 def getFilesFromJavascript(js_file: str):
     pass
+
 
 def getFilesFromCSS(css_file: str):
     pass
@@ -104,15 +182,26 @@ def main():
         sys.exit(1)
     course_folder = sys.argv[1]
 
-    # Get the list of files in static/
-    static_files = glob.glob(course_folder + "/static/*")
-
     # Get the list of files used in the course
     # Have to include verticals because they can have inline components.
-    course_files = [];
-    html_folders = ["html", "tabs", "static", "drafts/html", "drafts/tabs", "drafts/static"];
-    xml_folders = ["problems", "static", "vertical", "drafts/problems", "drafts/static", "drafts/vertical"];
-    other_folders = ["static"];
+    course_files = []
+    html_folders = [
+        "html",
+        "tabs",
+        "static",
+        "drafts/html",
+        "drafts/tabs",
+        "drafts/static",
+    ]
+    xml_folders = [
+        "problems",
+        "static",
+        "vertical",
+        "drafts/problems",
+        "drafts/static",
+        "drafts/vertical",
+    ]
+    other_folders = ["static"]
 
     for folder in html_folders:
         html_files = glob.glob(course_folder + "/" + folder + "/*.html")
@@ -128,26 +217,31 @@ def main():
             course_files.extend(getFilesFromJSON(f))
             course_files.extend(getFilesFromJavascript(f))
             course_files.extend(getFilesFromCSS(f))
-    
+
+    # Get the list of files in static/
+    static_files = glob.glob(course_folder + "/static/*")
+
     # Create "used" and "unused" folders in static/
     if not os.path.exists(course_folder + "/static/used"):
         os.makedirs(course_folder + "/static/used")
     if not os.path.exists(course_folder + "/static/unused"):
         os.makedirs(course_folder + "/static/unused")
-    
+
+    # Put the files in the right folders
     for file in static_files:
         #  Print out the file size if it's over 1 MB
         print("Large files:")
-        if os.path.getsize(file) > (1024*1024):
+        if os.path.getsize(file) > (1024 * 1024):
             print(os.path.basename(file) + ": " + formatByteSize(os.path.getsize(file)))
         if file in course_files:
             os.rename(file, course_folder + "/static/used/" + os.path.basename(file))
         else:
             os.rename(file, course_folder + "/static/unused/" + os.path.basename(file))
-    
+
     print("\nDone!\n")
 
     pass
+
 
 if __name__ == "__main__":
     main()
