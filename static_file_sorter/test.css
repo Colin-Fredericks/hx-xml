@@ -1,0 +1,13 @@
+a {
+  color: red;
+}
+.wind {
+  font-weight: bold;
+}
+#blue {
+  padding: 1px 2px 3px 4px;
+  border: 1px solid black;
+}
+body {
+  background: lightblue url("img_tree.gif") no-repeat fixed center; 
+}
