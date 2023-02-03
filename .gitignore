@@ -98,3 +98,5 @@ static_file_sorter/sorter_venv/
 
 # mypy
 .mypy_cache/
+
+.DS_Store

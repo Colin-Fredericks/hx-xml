@@ -7,6 +7,7 @@
 ##########################################
 
 import os
+import re
 import sys
 import bs4
 import glob
@@ -163,8 +164,8 @@ def getFilesFromHTML(html_file: str):
     for link_type in link_types:
         for link in soup.find_all(link_type):
             for source in sources:
-                if link.has_attr(source):
-                    for id in identifiers:
+                for id in identifiers:
+                    if link.has_attr(source):
                         if id in link[source]:
                             filename = link[source].split("/")[-1]
                             files.append(filename)
@@ -173,9 +174,6 @@ def getFilesFromHTML(html_file: str):
 
     # - TODO: Manifests and such from annotation tools
     # - TODO: The spreadsheets from Timeline.js will have images in /static/
-
-    # If we're linking to static files outside of the /static/ folder,
-    # that's a problem. We should track that.
 
     return {"files": files, "report": report}
 
@@ -223,8 +221,8 @@ def getFilesFromXML(xml_file: str):
     for link_type in link_types:
         for link in soup.find_all(link_type):
             for source in sources:
-                if link.has_attr(source):
-                    for id in identifiers:
+                for id in identifiers:
+                    if link.has_attr(source):
                         if id in link[source]:
                             filename = link[source].split("/")[-1]
                             files.append(filename)
@@ -289,7 +287,7 @@ def getFilesFromCSS(css_file: str):
     # If there are files stored somewhere other than /static/,
     # add them to the report. 
     for filename in files:
-        if "http" in filename:
+        if "//" in filename:
             report.append(filename)
 
     # TODO: Are there any other places we need to look for files?
@@ -307,8 +305,36 @@ def getFilesFromJavascript(js_file: str):
     Returns:
         list: A list of files used in the JS file, or at least things that are probably filenames.
     """
+    temp = []
     files = []
     report = []
+
+    # Here we need to go through each file line by line.
+    # Any time we find one of our extensions, we'll see if
+    # the text is inside a string. If it is, we'll add it.
+
+    # Get the JS file. We're assuming utf-8 encoding.
+    with open(js_file, "r", encoding="utf-8") as f:
+        js = f.read()
+
+    # Read through the file line by line
+    for line in js.splitlines():
+        # Check if the line has any of our extensions
+        for ext in extensions:
+            if ext in line:
+                # See if it's inside a string. If it is, take the whole line.
+                # We'll do this with a regex on the line.
+                if re.search(r'".*"', line):
+                    temp.append(line)
+                if re.search(r"'.*'", line):
+                    temp.append(line)
+
+    # decide whether the line has a local file or a full URL
+    for line in temp:
+        if "//" in line:
+            report.append(line)
+        else:
+            files.append(line)
 
     return {"files": files, "report": report}
 
@@ -316,8 +342,7 @@ def getFilesFromJavascript(js_file: str):
 def main():
     # Get the course folder from the command line
     if len(sys.argv) != 2:
-        print("Usage: python3 SortStaticFiles.py <course_folder>")
-        sys.exit(1)
+        sys.exit("Usage: python3 SortStaticFiles.py <course_folder>")
     course_folder = sys.argv[1]
 
     # Keep a text string for the report
@@ -349,31 +374,40 @@ def main():
         html_files = glob.glob(course_folder + "/" + folder + "/*.html")
         for f in html_files:
             html_data = getFilesFromHTML(f)
-            course_files.extend(html_data.files)
-            report.extend(html_data.report)
+            course_files.extend(html_data['files'])
+            report.extend(html_data['report'])
     for folder in xml_folders:
         xml_files = glob.glob(course_folder + "/" + folder + "/*.xml")
         for f in xml_files:
             xml_data = getFilesFromXML(f)
-            course_files.extend(xml_data.files)
-            report.extend(xml_data.report)
+            course_files.extend(xml_data['files'])
+            report.extend(xml_data['report'])
     for folder in other_folders:
-        for filetype in ["json", "js", "css"]:
-            other_files = glob.glob(course_folder + "/" + folder + "/*." + filetype)
-            for f in other_files:
-                json_data = getFilesFromJSON(f)
-                css_data = getFilesFromCSS(f)
-                js_data = getFilesFromJavascript(f)
-                course_files.extend(json_data.files)
-                course_files.extend(css_data.files)
-                course_files.extend(js_data.files)
-                report.extend(json_data.report)
-                report.extend(css_data.report)
-                report.extend(js_data.report)
+        json_files = glob.glob(course_folder + "/" + folder + "/*.json")
+        for f in json_files:
+            json_data = getFilesFromJSON(f)
+            course_files.extend(json_data['files'])
+            report.extend(json_data['report'])
+        js_files = glob.glob(course_folder + "/" + folder + "/*.js")
+        for f in js_files:
+            js_data = getFilesFromJavascript(f)
+            course_files.extend(js_data['files'])
+            report.extend(js_data['report'])
+        css_files = glob.glob(course_folder + "/" + folder + "/*.css")
+        for f in css_files:
+            css_data = getFilesFromCSS(f)
+            course_files.extend(css_data['files'])
+            report.extend(css_data['report'])
 
     # Remove duplicates
     course_files = list(set(course_files))
+    # print(course_files)
     report = list(set(report))
+    # print(report)
+
+    # Throw out anything that doesn't end in an extension we're looking for.
+    course_files = [f for f in course_files if f.split(".")[-1] in extensions]
+    report = [f for f in report if f.split(".")[-1] in extensions]
 
     # Get the list of files in static/
     static_files = glob.glob(course_folder + "/static/*")
@@ -387,16 +421,11 @@ def main():
     # Put the files in the right folders
     used_count = 0
     unused_count = 0
+
+    # TODO: it's currently sorting everything into "unused". Should check
+    # the filenames and make sure they're both at the same level of path.
+    # (For instance, if one is blah.jpg and the other is static/blah.jpg.)
     for file in static_files:
-        #  Print out the file size if it's over 1 MB
-        report += "\nLarge files:\n"
-        if os.path.getsize(file) > (1024 * 1024):
-            report += (
-                os.path.basename(file)
-                + ": "
-                + formatByteSize(os.path.getsize(file))
-                + "\n"
-            )
         if file in course_files:
             os.rename(file, course_folder + "/static/used/" + os.path.basename(file))
             used_count += 1
@@ -405,10 +434,10 @@ def main():
             unused_count += 1
 
     # Build the report and write it to a file
-    report += str(used_count) + " files moved to the 'used' folder.\n"
-    report += str(unused_count) + " files moved to the 'unused' folder.\n\n"
+    final_report += str(used_count) + " files moved to the 'used' folder.\n"
+    final_report += str(unused_count) + " files moved to the 'unused' folder.\n\n"
 
-    report += "Files linked to but not in Files & Uploads:\n"
+    final_report += "Files linked to but not in Files & Uploads:\n"
     for line in report:
         final_report += line + "\n"
 
