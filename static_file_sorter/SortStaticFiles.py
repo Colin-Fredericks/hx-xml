@@ -273,7 +273,26 @@ def getFilesFromCSS(css_file: str):
     files = []
     report = []
 
-    # Most of what we're looking for will be url() statements.
+    # Get the CSS file. We're assuming utf-8 encoding.
+    with open(css_file, "r", encoding="utf-8") as f:
+        css = f.read()
+    sheet = tinycss2.parse_stylesheet(css)
+
+    # Look through the CSS file for url() statements.
+    for rule in sheet:
+        if rule.type == 'qualified_rule':
+            for token in rule.content:
+                if token.type == 'function':
+                    if token.name == 'url':
+                        files.push(token.arguments[0].value)
+
+    # If there are files stored somewhere other than /static/,
+    # add them to the report. 
+    for filename in files:
+        if "http" in filename:
+            report.append(filename)
+
+    # TODO: Are there any other places we need to look for files?
 
     return {"files": files, "report": report}
 
