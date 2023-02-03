@@ -11,6 +11,7 @@ import sys
 import bs4
 import glob
 import json
+import tinycss2
 
 # List of extensions that are likely to be used in course files.
 # This is so we don't accidentally flag javascript code as files.
@@ -241,12 +242,13 @@ def getFilesFromJSON(json_file: str):
         html_file (str): The path to the JSON file.
 
     Returns:
-        list: A list of files used in the JSON file.
+        list: A list of files used in the JS file, or at least things that are probably filenames.
     """
 
     # Here we may have to just look for "anything that seems like a filename".
     # Use the extension list to filter out things that aren't files.
-    pass
+    files = []
+    report = []
 
     # open the file and read the contents
     with (open(json_file, "r")) as f:
@@ -255,13 +257,41 @@ def getFilesFromJSON(json_file: str):
     # Read through all values in the object and look for filenames
     possible_filenames = seekFilenames(json_data)
 
-
-def getFilesFromJavascript(js_file: str):
-    pass
+    return {"files": files, "report": report}
 
 
 def getFilesFromCSS(css_file: str):
-    pass
+    """
+    Returns a list of files used in the given CSS file.
+
+    Parameters:
+        html_file (str): The path to the CSS file.
+
+    Returns:
+        list: A list of files used in the CSS file.
+    """
+    files = []
+    report = []
+
+    # Most of what we're looking for will be url() statements.
+
+    return {"files": files, "report": report}
+
+
+def getFilesFromJavascript(js_file: str):
+    """
+    Returns a list of files used in the given JS file.
+
+    Parameters:
+        html_file (str): The path to the JS file.
+
+    Returns:
+        list: A list of files used in the JS file, or at least things that are probably filenames.
+    """
+    files = []
+    report = []
+
+    return {"files": files, "report": report}
 
 
 def main():
@@ -367,8 +397,6 @@ def main():
         f.write(final_report)
 
     print(report)
-
-    pass
 
 
 if __name__ == "__main__":
