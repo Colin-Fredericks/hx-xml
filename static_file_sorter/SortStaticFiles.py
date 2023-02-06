@@ -161,16 +161,32 @@ def getFilesFromHTML(html_file: str):
     sources = ["src", "href", "data"]
     identifiers = ["/static/", "type@asset+block", "/assets/courseware/"]
 
+
     for link_type in link_types:
         for link in soup.find_all(link_type):
             for source in sources:
-                for id in identifiers:
-                    if link.has_attr(source):
-                        if id in link[source]:
+                # Files stored in /static/ will refer to each other without
+                # any of the identifiers above. If we have a source
+                # that's *just* a file with no protocol or directory, count it.
+                if link.has_attr(source):
+                    if(len(link[source].split("/")) == 1):
+                        # Strip out URL parameters.
+                        if "?" in link[source]:
+                            link[source] = link[source].split("?")[0]
+                        files.append(link[source])
+                    else:
+                        add_file = False
+                        for id in identifiers:
+                          if id in link[source]:
+                              add_file = True
+                        if add_file:
                             filename = link[source].split("/")[-1]
                             files.append(filename)
+                            print("Including: " + filename)
+                            break
                         else:
                             report.append(link[source])
+                            print("Not including: " + link[source])
 
     # - TODO: Manifests and such from annotation tools
     # - TODO: The spreadsheets from Timeline.js will have images in /static/
@@ -278,14 +294,14 @@ def getFilesFromCSS(css_file: str):
 
     # Look through the CSS file for url() statements.
     for rule in sheet:
-        if rule.type == 'qualified_rule':
+        if rule.type == "qualified_rule":
             for token in rule.content:
-                if token.type == 'function':
-                    if token.name == 'url':
+                if token.type == "function":
+                    if token.name == "url":
                         files.push(token.arguments[0].value)
 
     # If there are files stored somewhere other than /static/,
-    # add them to the report. 
+    # add them to the report.
     for filename in files:
         if "//" in filename:
             report.append(filename)
@@ -374,40 +390,47 @@ def main():
         html_files = glob.glob(course_folder + "/" + folder + "/*.html")
         for f in html_files:
             html_data = getFilesFromHTML(f)
-            course_files.extend(html_data['files'])
-            report.extend(html_data['report'])
+            course_files.extend(html_data["files"].copy())
+            report.extend(html_data["report"].copy())
     for folder in xml_folders:
         xml_files = glob.glob(course_folder + "/" + folder + "/*.xml")
         for f in xml_files:
             xml_data = getFilesFromXML(f)
-            course_files.extend(xml_data['files'])
-            report.extend(xml_data['report'])
+            course_files.extend(xml_data["files"].copy())
+            report.extend(xml_data["report"].copy())
     for folder in other_folders:
         json_files = glob.glob(course_folder + "/" + folder + "/*.json")
         for f in json_files:
             json_data = getFilesFromJSON(f)
-            course_files.extend(json_data['files'])
-            report.extend(json_data['report'])
+            course_files.extend(json_data["files"].copy())
+            report.extend(json_data["report"].copy())
         js_files = glob.glob(course_folder + "/" + folder + "/*.js")
         for f in js_files:
             js_data = getFilesFromJavascript(f)
-            course_files.extend(js_data['files'])
-            report.extend(js_data['report'])
+            course_files.extend(js_data["files"].copy())
+            report.extend(js_data["report"].copy())
         css_files = glob.glob(course_folder + "/" + folder + "/*.css")
         for f in css_files:
             css_data = getFilesFromCSS(f)
-            course_files.extend(css_data['files'])
-            report.extend(css_data['report'])
+            course_files.extend(css_data["files"].copy())
+            report.extend(css_data["report"].copy())
 
     # Remove duplicates
     course_files = list(set(course_files))
-    # print(course_files)
     report = list(set(report))
-    # print(report)
+
+    # "used" overrides "unused"
+    report = [f for f in report if f not in course_files]
+    # TODO: I'm not catching /static/backpack.html when I should be. Why?
 
     # Throw out anything that doesn't end in an extension we're looking for.
     course_files = [f for f in course_files if f.split(".")[-1] in extensions]
     report = [f for f in report if f.split(".")[-1] in extensions]
+
+    print("\ncourse files")
+    print(course_files)
+    print("\nreport")
+    print(report)
 
     # Get the list of files in static/
     static_files = glob.glob(course_folder + "/static/*")
@@ -426,7 +449,7 @@ def main():
     # the filenames and make sure they're both at the same level of path.
     # (For instance, if one is blah.jpg and the other is static/blah.jpg.)
     for file in static_files:
-        if file in course_files:
+        if file.split("/")[-1] in course_files:
             os.rename(file, course_folder + "/static/used/" + os.path.basename(file))
             used_count += 1
         else:
