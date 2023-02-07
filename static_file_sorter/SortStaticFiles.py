@@ -125,7 +125,7 @@ def seekFilenames(jobj):
     return filenames
 
 
-def getFilesFromHTML(html_file: str):
+def getFilesFromHTML(filepath: str):
     """
     Returns a list of files used in the given HTML file.
 
@@ -140,7 +140,7 @@ def getFilesFromHTML(html_file: str):
     report = []
 
     # Get the HTML file. We're assuming utf-8 encoding.
-    with open(html_file, "r", encoding="utf-8") as f:
+    with open(filepath, "r", encoding="utf-8") as f:
         html = f.read()
 
     # Parse the HTML file
@@ -161,6 +161,7 @@ def getFilesFromHTML(html_file: str):
     sources = ["src", "href", "data"]
     identifiers = ["/static/", "type@asset+block", "/assets/courseware/"]
 
+    print("\nFrom " + filepath + ":")
 
     for link_type in link_types:
         for link in soup.find_all(link_type):
@@ -169,18 +170,17 @@ def getFilesFromHTML(html_file: str):
                 # any of the identifiers above. If we have a source
                 # that's *just* a file with no protocol or directory, count it.
                 if link.has_attr(source):
-                    if(len(link[source].split("/")) == 1):
-                        # Strip out URL parameters.
-                        if "?" in link[source]:
-                            link[source] = link[source].split("?")[0]
+                    if len(link[source].split("/")) == 1:
+                        # Strip out URL parameters if they exist.
+                        link[source] = link[source].split("?")[0]
                         files.append(link[source])
                     else:
                         add_file = False
                         for id in identifiers:
-                          if id in link[source]:
-                              add_file = True
+                            if id in link[source]:
+                                add_file = True
                         if add_file:
-                            filename = link[source].split("/")[-1]
+                            filename = os.path.basename(link[source])
                             files.append(filename)
                             print("Including: " + filename)
                             break
@@ -194,7 +194,7 @@ def getFilesFromHTML(html_file: str):
     return {"files": files, "report": report}
 
 
-def getFilesFromXML(xml_file: str):
+def getFilesFromXML(filepath: str):
     """
     Returns a list of files used in the given XML file.
 
@@ -209,7 +209,7 @@ def getFilesFromXML(xml_file: str):
     report = []
 
     # Get the HTML file. We're assuming utf-8 encoding.
-    with open(xml_file, "r", encoding="utf-8") as f:
+    with open(filepath, "r", encoding="utf-8") as f:
         xml = f.read()
 
     # Parse the HTML file
@@ -240,7 +240,7 @@ def getFilesFromXML(xml_file: str):
                 for id in identifiers:
                     if link.has_attr(source):
                         if id in link[source]:
-                            filename = link[source].split("/")[-1]
+                            filename = os.path.basename(link[source])
                             files.append(filename)
                         else:
                             report.append(link[source])
@@ -248,7 +248,7 @@ def getFilesFromXML(xml_file: str):
     return {"files": files, "report": report}
 
 
-def getFilesFromJSON(json_file: str):
+def getFilesFromJSON(json_file: str, course_folder: str):
     """
     Returns a list of files used in the given JSON file.
 
@@ -274,7 +274,7 @@ def getFilesFromJSON(json_file: str):
     return {"files": files, "report": report}
 
 
-def getFilesFromCSS(css_file: str):
+def getFilesFromCSS(css_file: str, course_folder: str):
     """
     Returns a list of files used in the given CSS file.
 
@@ -311,7 +311,7 @@ def getFilesFromCSS(css_file: str):
     return {"files": files, "report": report}
 
 
-def getFilesFromJavascript(js_file: str):
+def getFilesFromJavascript(js_file: str, course_folder: str):
     """
     Returns a list of files used in the given JS file.
 
@@ -361,6 +361,9 @@ def main():
         sys.exit("Usage: python3 SortStaticFiles.py <course_folder>")
     course_folder = sys.argv[1]
 
+    # Get the location of the course folder to use as our base
+    course_folder = os.path.abspath(course_folder)
+
     # Keep a text string for the report
     final_report = "Static File Report\n-----------------\n\n"
     report = []
@@ -387,33 +390,34 @@ def main():
     other_folders = ["static"]
 
     for folder in html_folders:
-        html_files = glob.glob(course_folder + "/" + folder + "/*.html")
+        html_files = glob.glob(os.path.join(course_folder, folder, "*.html"))
         for f in html_files:
-            html_data = getFilesFromHTML(f)
+            html_data = getFilesFromHTML(os.path.join(course_folder, f))
             course_files.extend(html_data["files"].copy())
             report.extend(html_data["report"].copy())
+
     for folder in xml_folders:
-        xml_files = glob.glob(course_folder + "/" + folder + "/*.xml")
+        xml_files = glob.glob(os.path.join(course_folder, folder, "*.xml"))
         for f in xml_files:
-            xml_data = getFilesFromXML(f)
+            xml_data = getFilesFromXML(os.path.join(course_folder, f))
             course_files.extend(xml_data["files"].copy())
             report.extend(xml_data["report"].copy())
+
     for folder in other_folders:
-        json_files = glob.glob(course_folder + "/" + folder + "/*.json")
-        for f in json_files:
-            json_data = getFilesFromJSON(f)
-            course_files.extend(json_data["files"].copy())
-            report.extend(json_data["report"].copy())
-        js_files = glob.glob(course_folder + "/" + folder + "/*.js")
-        for f in js_files:
-            js_data = getFilesFromJavascript(f)
-            course_files.extend(js_data["files"].copy())
-            report.extend(js_data["report"].copy())
-        css_files = glob.glob(course_folder + "/" + folder + "/*.css")
-        for f in css_files:
-            css_data = getFilesFromCSS(f)
-            course_files.extend(css_data["files"].copy())
-            report.extend(css_data["report"].copy())
+        for filetype in ["json", "js", "css"]:
+            other_files = glob.glob(
+                os.path.join(course_folder, folder, "*." + filetype)
+            )
+            for f in other_files:
+                data = {}
+                if filetype == "json":
+                    data = getFilesFromJSON(f, course_folder)
+                elif filetype == "js":
+                    data = getFilesFromJavascript(f, course_folder)
+                elif filetype == "css":
+                    data = getFilesFromCSS(f, course_folder)
+                course_files.extend(data["files"].copy())
+                report.extend(data["report"].copy())
 
     # Remove duplicates
     course_files = list(set(course_files))
@@ -433,7 +437,7 @@ def main():
     print(report)
 
     # Get the list of files in static/
-    static_files = glob.glob(course_folder + "/static/*")
+    static_files = glob.glob(os.join(course_folder, "static", "*"))
 
     # Create "used" and "unused" folders in static/
     if not os.path.exists(course_folder + "/static/used"):
@@ -445,15 +449,18 @@ def main():
     used_count = 0
     unused_count = 0
 
-    # TODO: it's currently sorting everything into "unused". Should check
-    # the filenames and make sure they're both at the same level of path.
-    # (For instance, if one is blah.jpg and the other is static/blah.jpg.)
     for file in static_files:
-        if file.split("/")[-1] in course_files:
-            os.rename(file, course_folder + "/static/used/" + os.path.basename(file))
+        if os.path.basename(file) in course_files:
+            os.rename(
+                os.path.join(course_folder, file),
+                os.path.join(course_folder, "static", "used", os.path.basename(file)),
+            )
             used_count += 1
         else:
-            os.rename(file, course_folder + "/static/unused/" + os.path.basename(file))
+            os.rename(
+                os.path.join(course_folder, file),
+                os.path.join(course_folder, "static", "unused", os.path.basename(file)),
+            )
             unused_count += 1
 
     # Build the report and write it to a file
@@ -464,7 +471,7 @@ def main():
     for line in report:
         final_report += line + "\n"
 
-    with open(course_folder + "/static/report.txt", "w") as f:
+    with open(os.path.join(course_folder, "static", "report.txt"), "w") as f:
         f.write(final_report)
 
     print(report)
