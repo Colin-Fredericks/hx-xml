@@ -13,6 +13,7 @@ import bs4
 import glob
 import json
 import tinycss2
+from urllib.parse import urlparse
 
 # List of extensions that are likely to be used in course files.
 # This is so we don't accidentally flag javascript code as files.
@@ -122,6 +123,9 @@ def seekFilenames(jobj):
             for item in jobj[key]:
                 if type(item) == dict:
                     filenames += seekFilenames(item)
+                if type(item) == str:
+                    if item.split(".")[-1] in extensions:
+                        filenames.append(item)
     return filenames
 
 
@@ -170,23 +174,22 @@ def getFilesFromHTML(filepath: str):
                 # any of the identifiers above. If we have a source
                 # that's *just* a file with no protocol or directory, count it.
                 if link.has_attr(source):
-                    if len(link[source].split("/")) == 1:
-                        # Strip out URL parameters if they exist.
-                        link[source] = link[source].split("?")[0]
+                    link_path = urlparse(link[source]).path
+                    linked_file = os.path.basename(link_path)
+                    if link_path == linked_file:
                         files.append(link[source])
                     else:
                         add_file = False
                         for id in identifiers:
-                            if id in link[source]:
+                            if id in link_path:
                                 add_file = True
                         if add_file:
-                            filename = os.path.basename(link[source])
-                            files.append(filename)
-                            print("Including: " + filename)
+                            files.append(linked_file)
+                            print("Including: " + linked_file)
                             break
                         else:
-                            report.append(link[source])
-                            print("Not including: " + link[source])
+                            report.append(link_path)
+                            print("Not including: " + link_path)
 
     # - TODO: Manifests and such from annotation tools
     # - TODO: The spreadsheets from Timeline.js will have images in /static/
@@ -197,6 +200,8 @@ def getFilesFromHTML(filepath: str):
 def getFilesFromXML(filepath: str):
     """
     Returns a list of files used in the given XML file.
+    Finds files in both attributes and text,
+    as long as the text is the only thing in the tag.
 
     Parameters:
         html_file (str): The path to the XML file.
@@ -240,8 +245,7 @@ def getFilesFromXML(filepath: str):
                 for id in identifiers:
                     if link.has_attr(source):
                         if id in link[source]:
-                            filename = os.path.basename(link[source])
-                            files.append(filename)
+                            files.append(os.path.basename(link[source]))
                         else:
                             report.append(link[source])
 
@@ -437,7 +441,7 @@ def main():
     print(report)
 
     # Get the list of files in static/
-    static_files = glob.glob(os.join(course_folder, "static", "*"))
+    static_files = glob.glob(os.path.join(course_folder, "static", "*"))
 
     # Create "used" and "unused" folders in static/
     if not os.path.exists(course_folder + "/static/used"):
@@ -474,6 +478,7 @@ def main():
     with open(os.path.join(course_folder, "static", "report.txt"), "w") as f:
         f.write(final_report)
 
+    print("\n")
     print(report)
 
 
