@@ -129,7 +129,7 @@ def seekFilenames(jobj):
     return filenames
 
 
-def getFilesFromHTML(filepath: str):
+def getFilesFromHTML(html_file: str, course_folder: str):
     """
     Returns a list of files used in the given HTML file.
 
@@ -144,7 +144,7 @@ def getFilesFromHTML(filepath: str):
     report = []
 
     # Get the HTML file. We're assuming utf-8 encoding.
-    with open(filepath, "r", encoding="utf-8") as f:
+    with open(os.path.join(course_folder, html_file), "r", encoding="utf-8") as f:
         html = f.read()
 
     # Parse the HTML file
@@ -160,12 +160,13 @@ def getFilesFromHTML(filepath: str):
     # - Audio tags that point to the /static/ folder
     # - Oddballs like <embed> and <object> tags
     # - Scripts and style sheets that point to the /static/ folder
+    # - Basically anything that has a src, href, or data attribute or something like it
 
     link_types = ["a", "img", "iframe", "audio", "embed", "object", "script", "link"]
     sources = ["src", "href", "data"]
     identifiers = ["/static/", "type@asset+block", "/assets/courseware/"]
 
-    print("\nFrom " + filepath + ":")
+    print("\nFrom " + os.path.join(course_folder, html_file) + ":")
 
     for link_type in link_types:
         for link in soup.find_all(link_type):
@@ -197,7 +198,7 @@ def getFilesFromHTML(filepath: str):
     return {"files": files, "report": report}
 
 
-def getFilesFromXML(filepath: str):
+def getFilesFromXML(xml_file: str, course_folder: str):
     """
     Returns a list of files used in the given XML file.
     Finds files in both attributes and text,
@@ -214,7 +215,7 @@ def getFilesFromXML(filepath: str):
     report = []
 
     # Get the HTML file. We're assuming utf-8 encoding.
-    with open(filepath, "r", encoding="utf-8") as f:
+    with open(os.path.join(course_folder, xml_file), "r", encoding="utf-8") as f:
         xml = f.read()
 
     # Parse the HTML file
@@ -269,7 +270,7 @@ def getFilesFromJSON(json_file: str, course_folder: str):
     report = []
 
     # open the file and read the contents
-    with (open(json_file, "r")) as f:
+    with (open(os.path.join(course_folder, json_file), "r")) as f:
         json_data = json.load(f)
 
     # Read through all values in the object and look for filenames
@@ -292,7 +293,7 @@ def getFilesFromCSS(css_file: str, course_folder: str):
     report = []
 
     # Get the CSS file. We're assuming utf-8 encoding.
-    with open(css_file, "r", encoding="utf-8") as f:
+    with open(os.path.join(course_folder, css_file), "r", encoding="utf-8") as f:
         css = f.read()
     sheet = tinycss2.parse_stylesheet(css)
 
@@ -334,7 +335,7 @@ def getFilesFromJavascript(js_file: str, course_folder: str):
     # the text is inside a string. If it is, we'll add it.
 
     # Get the JS file. We're assuming utf-8 encoding.
-    with open(js_file, "r", encoding="utf-8") as f:
+    with open(os.path.join(course_folder, js_file), "r", encoding="utf-8") as f:
         js = f.read()
 
     # Read through the file line by line
@@ -351,12 +352,52 @@ def getFilesFromJavascript(js_file: str, course_folder: str):
 
     # decide whether the line has a local file or a full URL
     for line in temp:
-        if "//" in line:
+        if "//" in line:  # This means it has a protocol listed, like https://
             report.append(line)
         else:
             files.append(line)
 
     return {"files": files, "report": report}
+
+
+def fullCourseTextSearch(unused_files: list, course_folder: str):
+    """
+    Double-checks our list of unused files against a full text
+    search of every file in the course.
+    Specifically checks .html, .xml, .json, .css, and .js files.
+
+    @param course_folder: The path to the course folder.
+    @param unused_files: A list of files that are unused.
+    @return: A list of files that are definitely unused.
+    """
+
+    all_files = []
+    # Tired of pass-by-value issues, so we'll just make a copy of the list.
+    really_unused = unused_files.copy()
+
+    # Get a list of all files in the course
+    for root, dirs, files in os.walk(course_folder):
+        for file in files:
+            if os.path.basename(file).split(".")[-1] in [
+                ".html",
+                ".xml",
+                ".json",
+                ".css",
+                ".js",
+            ]:
+                all_files.append(os.path.join(root, file))
+
+    # Open the files one at a time.
+    # Parse the file one line at a time.
+    # If one of our unused files is in the line, remove it from the list.
+    for file in all_files:
+        with open(file, "r") as f:
+            for line in f:
+                for unused_file in really_unused:
+                    if unused_file in line:
+                        really_unused.remove(unused_file)
+
+    return really_unused
 
 
 def main():
@@ -396,14 +437,14 @@ def main():
     for folder in html_folders:
         html_files = glob.glob(os.path.join(course_folder, folder, "*.html"))
         for f in html_files:
-            html_data = getFilesFromHTML(os.path.join(course_folder, f))
+            html_data = getFilesFromHTML(f, course_folder)
             course_files.extend(html_data["files"].copy())
             report.extend(html_data["report"].copy())
 
     for folder in xml_folders:
         xml_files = glob.glob(os.path.join(course_folder, folder, "*.xml"))
         for f in xml_files:
-            xml_data = getFilesFromXML(os.path.join(course_folder, f))
+            xml_data = getFilesFromXML(f, course_folder)
             course_files.extend(xml_data["files"].copy())
             report.extend(xml_data["report"].copy())
 
@@ -466,6 +507,21 @@ def main():
                 os.path.join(course_folder, "static", "unused", os.path.basename(file)),
             )
             unused_count += 1
+
+    # Check the "unused" folder for any files that are linked to in the course
+    print("Double-checking the unused folder...")
+    unused_files = glob.glob(os.path.join(course_folder, "static", "unused", "*"))
+    really_unused = fullCourseTextSearch(unused_files, course_folder)
+
+    # Move any items that are actually used back to the "used" folder
+    turns_out_theyre_used = list(set(unused_files) - set(really_unused))
+    for file in turns_out_theyre_used:
+        os.rename(
+            os.path.join(course_folder, file),
+            os.path.join(course_folder, "static", "used", os.path.basename(file)),
+        )
+        used_count += 1
+        unused_count -= 1
 
     # Build the report and write it to a file
     final_report += str(used_count) + " files moved to the 'used' folder.\n"
