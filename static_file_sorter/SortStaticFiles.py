@@ -214,17 +214,20 @@ def getFilesFromXML(xml_file: str, course_folder: str):
     files = []
     report = []
 
-    # Get the HTML file. We're assuming utf-8 encoding.
+    # Get the XML file. We're assuming utf-8 encoding.
     with open(os.path.join(course_folder, xml_file), "r", encoding="utf-8") as f:
         xml = f.read()
 
-    # Parse the HTML file
+    # Parse the XML file
     soup = bs4.BeautifulSoup(xml, "lxml")
 
     # We need to check basically the same stuff from HTML, and also:
     # - <jsinput> tags
     # - Python libraries from CAPA problems
+    # - Video transcripts
+    
     # TODO: How do we catch things like SuperEarths' randomized images?
+    # Do we just need to run the whole thing through QA?
 
     link_types = [
         "a",
@@ -236,6 +239,7 @@ def getFilesFromXML(xml_file: str, course_folder: str):
         "script",
         "link",
         "jsinput",
+        "transcript",
     ]
     sources = ["src", "href", "data", "html_file"]
     identifiers = ["/static/", "type@asset+block", "/assets/courseware/"]
@@ -428,9 +432,11 @@ def main():
         "problems",
         "static",
         "vertical",
+        "video",
         "drafts/problems",
         "drafts/static",
         "drafts/vertical",
+        "drafts/video",
     ]
     other_folders = ["static"]
 
