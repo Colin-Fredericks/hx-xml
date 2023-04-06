@@ -503,6 +503,7 @@ def main():
     # "used" overrides "unused"
     report = [f for f in report if f not in course_files]
     # TODO: I'm not catching /static/backpack.html when I should be. Why?
+    # Oh, it's because it's looking for a file named "static/backpack.html" rather than "backpack.html".
 
     # Throw out anything that doesn't end in an extension we're looking for.
     course_files = [f for f in course_files if f.split(".")[-1] in extensions]
