@@ -19,9 +19,10 @@ to do XML things.
 """
 
 
-
 # Recursion function for outline-declared xml files
 def drillDown(folder, filename, root, parentage, args):
+
+    leaf_nodes = ["html", "problem", "video", "poll"]
 
     # Try to open file.
     try:
@@ -41,22 +42,24 @@ def drillDown(folder, filename, root, parentage, args):
 
     XMLInfo = getXMLInfo(folder, root, parentage, args)
 
-    # Remove any existing XML comments.
+    # Remove any existing "LOCATION" XML comments.
     for comment in root.xpath("//comment()"):
         if "LOCATION: " in comment.text:
             comment.getparent().remove(comment)
 
-    # Add location comments to every container.
+    # Add location comments to every container and some specific leaf nodes.
     location_comment = "LOCATION: "
-    if root.tag in ['section','sequential', 'vertical']:
+    if root.tag in ["section", "sequential", "vertical"] or root.tag in leaf_nodes:
         location_comment = location_comment + "\n    Section: " + parentage["section"]
-    if root.tag in ['vertical', 'sequential']:
-        location_comment = location_comment + "\n    Subsection: " + parentage["subsection"]
-    if root.tag in ['vertical']:
+    if root.tag in ["sequential", "vertical"] or root.tag in leaf_nodes:
+        location_comment = (location_comment + "\n    Subsection: " + parentage["subsection"])
+    if root.tag in ["vertical"] or root.tag in leaf_nodes:
         location_comment = location_comment + "\n    Unit: " + parentage["page"]
+    if root.tag in leaf_nodes:
+        location_comment = location_comment + parentage["component"]
 
     c = ET.Comment(location_comment)
-    c.tail='\n'
+    c.tail = "\n"
     root.insert(0, c)
 
     tree.write(
@@ -82,6 +85,8 @@ def getXMLInfo(folder, root, parentage, args):
         "conditional",
     ]
 
+    leaf_nodes = ["html", "problem", "video", "poll"]
+
     contents = []
     has_discussion = False
 
@@ -101,6 +106,8 @@ def getXMLInfo(folder, root, parentage, args):
         parentage["page"] = display_name
     elif root.tag in branch_nodes:
         parentage["smaller"] = display_name
+    elif root.tag in leaf_nodes:
+        parentage["component"] = display_name
 
     for index, child in enumerate(root):
         temp = {
@@ -133,7 +140,7 @@ def getXMLInfo(folder, root, parentage, args):
         if child.tag in ["wiki"]:
             child_info = {"contents": False, "parent_name": child.tag}
             del temp["contents"]
-        elif child.tag in branch_nodes:
+        elif child.tag in branch_nodes or child.tag in leaf_nodes:
             child_info = drillDown(nextFile, temp["url"], child, parentage, args)
             temp["contents"] = child_info["contents"]
         else:
