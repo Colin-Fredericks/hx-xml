@@ -14,6 +14,7 @@ import glob
 import json
 import tinycss2
 from urllib.parse import urlparse
+from lxml import etree as ET
 
 # List of extensions that are likely to be used in course files.
 # This is so we don't accidentally flag javascript code as files.
@@ -225,7 +226,7 @@ def getFilesFromXML(xml_file: str, course_folder: str):
     # - <jsinput> tags
     # - Python libraries from CAPA problems
     # - Video transcripts
-    
+
     # TODO: How do we catch things like SuperEarths' randomized images?
     # Do we just need to run the whole thing through QA?
 
@@ -440,6 +441,31 @@ def main():
     ]
     other_folders = ["static"]
 
+    # Get the course run number.
+    course_root = os.path.join(course_folder, "course.xml")
+    course_run = ""
+    with open(course_root, "r") as f:
+        course_xml = f.read()
+        tree = ET.fromstring(course_xml)
+        course_run = tree.attrib["url_name"]
+
+    # Check the policy.json file to see what tabs there are.
+    policy_file = os.path.join(course_folder, "policies", course_run, "policy.json")
+    tabs_to_keep = []
+    with open(policy_file, "r") as f:
+        policy = json.load(f)
+        tabs = policy["course/" + course_run]["tabs"]
+        for tab in tabs:
+            if tab["type"] == "static_tab":
+                # Add that tab to a list of files to not delete.
+                tabs_to_keep.append(tab["url_slug"] + ".html")
+    # Remove any tabs that aren't in the policy.json file.
+    tab_list = glob.glob(os.path.join(course_folder, "tabs", "*.html"))
+    for tab in tab_list:
+        if os.path.basename(tab) not in tabs_to_keep:
+            os.remove(tab)
+
+    # Get the list of files used in the course
     for folder in html_folders:
         html_files = glob.glob(os.path.join(course_folder, folder, "*.html"))
         for f in html_files:
@@ -489,6 +515,12 @@ def main():
 
     # Get the list of files in static/
     static_files = glob.glob(os.path.join(course_folder, "static", "*"))
+    # If any of them are directories, skip those.
+    static_files = [f for f in static_files if os.path.isfile(f)]
+
+    # TODO: We may be ending up with files that are referenced from /static/ files
+    # that have been removed from the course. We need to check for those.
+    # Not a high-priority item.
 
     # Create "used" and "unused" folders in static/
     if not os.path.exists(course_folder + "/static/used"):
