@@ -3,6 +3,7 @@
 
 This is a bunch of batch tools to work directly with a course export (the file structure, not the tarball) or with .srt files. You can run `python3 filename.py` for each one to have it show a set of instructions, or just open the code with a text editor - the instructions are the first thing there.
 
+* `SortStaticFiles.py` finds any files in the /static/ folder that aren't in use and cordons them off into an "unused" folder.
 * `NameThatPage.py` adds an XML comment in every chapter, sequential, and vertical file to indicate its location in the course.
 * `md2edx.py` and `edx2md.py` are intended to help with transcription. Run one to take the files from the HTML folder and turn them into markdown files. Run the other on markdown files to make HTML.
 * `WordCount.py` is a transcription planning tool. It attempts to give a reasonable word count for the entire course. Must be run after `edx2html`. Not a really carefully-polished script.

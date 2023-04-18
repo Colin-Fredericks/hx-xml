@@ -275,7 +275,7 @@ def getFilesFromJSON(json_file: str, course_folder: str):
     report = []
 
     # open the file and read the contents
-    with (open(os.path.join(course_folder, json_file), "r")) as f:
+    with open(os.path.join(course_folder, json_file), "r") as f:
         json_data = json.load(f)
 
     # Read through all values in the object and look for filenames
@@ -409,7 +409,12 @@ def fullCourseTextSearch(unused_files: list, course_folder: str):
 def main():
     # Get the course folder from the command line
     if len(sys.argv) != 2:
-        sys.exit("Usage: python3 SortStaticFiles.py <course_folder>")
+        print("""
+        Usage: python3 SortStaticFiles.py <course_folder>
+        Takes all files in the /static/ folder and moves them 
+        to new folders: /static/unused/ and /static/used
+        depending on whether they're used in the course.""")
+        sys.exit()
     course_folder = sys.argv[1]
 
     # Get the location of the course folder to use as our base
