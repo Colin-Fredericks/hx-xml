@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import lxml.etree
 import argparse
 from glob import glob
 
@@ -19,44 +20,65 @@ Valid options:
 Last update: Dec 15th 2021
 """
 
+
 ##############################################
 # Get the word count from the file
 ##############################################
-def countWords(f):
+def countWords(f, name):
     word_count = 0
-    for line in f:
+    if name.endswith(".xml"):
+        # Parse with lxml
+        tree = lxml.etree.parse(f)
+        root = tree.getroot()
+        # Get the text of all tags.
+        text = root.xpath("//text()")
+        # Join the text together.
+        text = " ".join(text)
+        # Split the text into words.
+        words = text.split(" ")
+        # Remove empty strings.
+        words = [w for w in words if w != ""]
+        # Remove words that are just numbers.
+        words = [w for w in words if not w.isnumeric()]
+        # Remove words that are just punctuation.
+        words = [w for w in words if not w.isalnum()]
+        # Count the words
+        word_count = len(words)
 
-        # Skip blank lines.
-        if len(line) == 0 or line == "\n" or line == "\r":
-            continue
-        # Check for SRT time lines and skip them.
-        if re.search("\d\d --> \d\d:", line):
-            continue
-        # Skip lines that are just a single number.
-        if re.search("^\d+$", line):
-            continue
-        # Check for lines that are just times and skip them.
-        if re.search("^\d\d:\d\d$", line):
-            continue
-        if re.search("^\d\d:\d\d:\d\d$", line):
-            continue
 
-        # Don't include HTML tags
-        # TODO: Not sure how to handle that one at the moment...
-        # ...especially since they might be split over multiple lines.
-        # Might need to bring in the big guns.
+    else:
+        for line in f:
+            # Skip blank lines.
+            if len(line) == 0 or line == "\n" or line == "\r":
+                continue
+            # Check for SRT time lines and skip them.
+            if re.search("\d\d --> \d\d:", line):
+                continue
+            # Skip lines that are just a single number.
+            if re.search("^\d+$", line):
+                continue
+            # Check for lines that are just times and skip them.
+            if re.search("^\d\d:\d\d$", line):
+                continue
+            if re.search("^\d\d:\d\d:\d\d$", line):
+                continue
 
-        # TODO: Handle LaTeX? Might be easier to split than HTML, really.
+            # Don't include HTML tags
+            # TODO: Not sure how to handle that one at the moment...
+            # ...especially since they might be split over multiple lines.
+            # Might need to bring in the big guns.
 
-        raw_words = line.split(" ")
-        reduced_words = []
-        for w in raw_words:
-            # Don't include 1-character "words"
-            if len(w) > 1:
-                reduced_words.append(w)
+            # TODO: Handle LaTeX? Might be easier to split than HTML, really.
 
-        # Store filename and count
-        word_count += len(reduced_words)
+            raw_words = line.split(" ")
+            reduced_words = []
+            for w in raw_words:
+                # Don't include 1-character "words"
+                if len(w) > 1:
+                    reduced_words.append(w)
+
+            # Store filename and count
+            word_count += len(reduced_words)
 
     return word_count
 
@@ -76,7 +98,7 @@ def walkFiles(file_names):
         # We don't currently handle folders.
         if os.path.isfile(name):
             with open(name, "r") as f:
-                results.append({"name": name, "word_count": countWords(f)})
+                results.append({"name": name, "word_count": countWords(f, name)})
         else:
             sys.exit("Skipping directory: " + name)
             continue
@@ -88,7 +110,6 @@ def walkFiles(file_names):
 # Main starts here
 ##############################################
 def MakeNewRun(argv):
-
     # Read in the filename and options
     parser = argparse.ArgumentParser(usage=instructions, add_help=False)
     parser.add_argument("source_files", default=None, nargs="*")
