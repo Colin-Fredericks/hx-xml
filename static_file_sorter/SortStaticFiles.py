@@ -116,7 +116,7 @@ def seekFilenames(jobj):
     filenames = []
     for key in jobj:
         if type(jobj[key]) == str:
-            if jobj[key].split(".")[-1] in extensions:
+            if jobj[key].split(".")[-1].lower() in extensions:
                 filenames.append(jobj[key])
         elif type(jobj[key]) == dict:
             filenames += seekFilenames(jobj[key])
@@ -125,7 +125,7 @@ def seekFilenames(jobj):
                 if type(item) == dict:
                     filenames += seekFilenames(item)
                 if type(item) == str:
-                    if item.split(".")[-1] in extensions:
+                    if item.split(".")[-1].lower() in extensions:
                         filenames.append(item)
     return filenames
 
@@ -347,7 +347,7 @@ def getFilesFromJavascript(js_file: str, course_folder: str):
     for line in js.splitlines():
         # Check if the line has any of our extensions
         for ext in extensions:
-            if ext in line:
+            if ext in line.lower():
                 # See if it's inside a string. If it is, take the whole line.
                 # We'll do this with a regex on the line.
                 if re.search(r'".*"', line):
@@ -400,6 +400,7 @@ def fullCourseTextSearch(unused_files: list, course_folder: str):
             for line in f:
                 for unused_file in really_unused:
                     if unused_file in line:
+                        print(unused_file + " is used in " + file)
                         really_unused.remove(unused_file)
 
     return really_unused
@@ -506,13 +507,13 @@ def main():
     # Oh, it's because it's looking for a file named "static/backpack.html" rather than "backpack.html".
 
     # Throw out anything that doesn't end in an extension we're looking for.
-    course_files = [f for f in course_files if f.split(".")[-1] in extensions]
-    report = [f for f in report if f.split(".")[-1] in extensions]
+    course_files = [f for f in course_files if f.split(".")[-1].lower() in extensions]
+    report = [f for f in report if f.split(".")[-1].lower() in extensions]
 
-    print("\ncourse files")
-    print(course_files)
-    print("\nreport")
-    print(report)
+    # print("\ncourse files")
+    # print(course_files)
+    # print("\nreport")
+    # print(report)
 
     # Get the list of files in static/
     static_files = glob.glob(os.path.join(course_folder, "static", "*"))
@@ -574,7 +575,7 @@ def main():
         f.write(final_report)
 
     print("\n")
-    print(report)
+    print(final_report)
 
 
 if __name__ == "__main__":
