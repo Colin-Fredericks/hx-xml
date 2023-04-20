@@ -1,10 +1,10 @@
-import io
 import os
 import re
 import sys
 import lxml.etree
 import argparse
 from glob import glob
+from bs4 import BeautifulSoup as BS
 
 instructions = """
 To use:
@@ -31,19 +31,15 @@ def countWords(f, ext):
     """
 
     word_count = 0
-    if ext == ".xml" or ext == ".html":
-        if ext == ".xml":
-            # Parse with lxml
-            tree = lxml.etree.parse(f)
-            root = tree.getroot()
-        else:
-            # Parse the html file with lxml
-            parser = lxml.etree.HTMLParser()
-            tree   = lxml.etree.parse(io.StringIO(f), parser)
-            root   = tree.getroot()
-
+    if ext == ".xml":
+        # Parse with lxml
+        tree = lxml.etree.parse(f)
+        root = tree.getroot()
         # Get the text of all tags.
-        text = root.xpath("//text()")
+        if root is not None:
+            text = root.xpath("//text()")
+        else:
+            return word_count
         # Join the text together.
         text = " ".join(text)
         # Split the text into words.
@@ -52,8 +48,26 @@ def countWords(f, ext):
         words = [w for w in words if w != ""]
         # Remove words that are just numbers.
         words = [w for w in words if not w.isnumeric()]
-        # Remove words that are just punctuation.
-        words = [w for w in words if not w.isalnum()]
+        # Remove one-letter words
+        words = [w for w in words if len(w) > 1]
+        # Count the words
+        word_count = len(words)
+        # Subtract off the number of child tags from the root.
+        word_count = word_count - len(root.getchildren()) - 1
+
+    elif ext == ".html":
+        # Parse the file with BeautifulSoup.
+        soup = BS(f, "html.parser")
+        # Get the text of all tags.
+        text = soup.get_text()
+        # Split the text into words.
+        words = text.split(" ")
+        # Remove empty strings.
+        words = [w for w in words if w != ""]
+        # Remove words that are just numbers.
+        words = [w for w in words if not w.isnumeric()]
+        # Remove one-letter words
+        words = [w for w in words if len(w) > 1]
         # Count the words
         word_count = len(words)
 
@@ -74,13 +88,6 @@ def countWords(f, ext):
             if re.search("^\d\d:\d\d:\d\d$", line):
                 continue
 
-            # Don't include HTML tags
-            # TODO: Not sure how to handle that one at the moment...
-            # ...especially since they might be split over multiple lines.
-            # Might need to bring in the big guns.
-
-            # TODO: Handle LaTeX? Might be easier to split than HTML, really.
-
             raw_words = line.split(" ")
             reduced_words = []
             for w in raw_words:
@@ -91,6 +98,9 @@ def countWords(f, ext):
             # Store filename and count
             word_count += len(reduced_words)
 
+    # Sometimes the word count is negative. I don't know why.
+    if word_count < 0:
+        word_count = 0
     return word_count
 
 
@@ -103,7 +113,7 @@ def walkFiles(file_names):
     """
 
     results = []
-    results_flat = "Word count results:\n"
+    results_flat = "filename,words\n"
     # Open all the files or folders.
     for name in file_names:
         # Check to make sure it exists
@@ -113,19 +123,32 @@ def walkFiles(file_names):
 
         for root, dirs, thing in os.walk(name):
             for d in dirs:
+                # We're only keeping certain directories.
+                # TODO: Handle the drafts directory properly.
+                if d not in ["html", "problem", "vertical", "static", "tabs"]:
+                    continue
                 # Add the directory name to the flat results.
                 results_flat += "\n" + d + "\n"
                 # Walk through the directory.
-                for root, dirs, files in os.walk(d):
+                for root, dirs, files in os.walk(os.path.join(name, d)):
+                    # If this is the HTML directory, skip the XML files.
+                    if d == "html":
+                        files = [f for f in files if f[-4:] != ".xml"]
                     for f in files:
                         # Only open files with specific extensions.
                         ext = os.path.splitext(f)[1]
                         if ext not in [".xml", ".html", ".md", ".srt"]:
                             continue
-                        with open(f, "r") as f:
-                            name, count = countWords(f, ext)
-                            results.append({"name": f, "word_count": count})
-                            results_flat += f + ": " + str(count) + "\n"
+                        with open(os.path.join(name, d, f), "r") as g:
+                            # print(os.path.basename(g.name))
+                            count = countWords(g, ext)
+                            results.append(
+                                {
+                                    "name": os.path.basename(g.name),
+                                    "word_count": count
+                                }
+                            )
+                            results_flat += os.path.basename(g.name) + "," + str(count) + "\n"
 
     return results, results_flat
 
@@ -160,8 +183,9 @@ def WordCount(argv):
     total_count = 0
     for r in results:
         total_count += r["word_count"]
-        print(r["name"] + ": " + str(r["word_count"]))
-        print("Total words:" + str(total_count))
+        # print(r["name"] + ": " + str(r["word_count"]))
+    
+    print("Total words:" + str(total_count))
 
     # Put them in a file.
     new_file = open(args.o, "w")
