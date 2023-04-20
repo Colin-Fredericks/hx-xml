@@ -1,3 +1,4 @@
+import io
 import os
 import re
 import sys
@@ -7,29 +8,40 @@ from glob import glob
 
 instructions = """
 To use:
-python3 word_count.py filename (options)
+python3 word_count.py path/to/course/folder (options)
 
 Gets the word count from SRT files, YouTube transcripts,
 and Markdown files. Not guaranteed to perfectly match any
-other word counter, but should be within 10%.
+other word counter, but should be within 10%. Outputs a text file.
 
 Valid options:
   -h Help. Print this message.
-  -o Output filename.
+  -o Output filename. Default is word_count.csv
 
-Last update: Dec 15th 2021
+Last update: Apr 20th 2023
 """
 
 
-##############################################
-# Get the word count from the file
-##############################################
-def countWords(f, name):
+def countWords(f, ext):
+    """
+    Counts the words in a file.
+    @param f: The file object for the file to count words in.
+    @param ext: The extension of the file.
+    @return: A tuple containing the filename and the word count
+    """
+
     word_count = 0
-    if name.endswith(".xml"):
-        # Parse with lxml
-        tree = lxml.etree.parse(f)
-        root = tree.getroot()
+    if ext == ".xml" or ext == ".html":
+        if ext == ".xml":
+            # Parse with lxml
+            tree = lxml.etree.parse(f)
+            root = tree.getroot()
+        else:
+            # Parse the html file with lxml
+            parser = lxml.etree.HTMLParser()
+            tree   = lxml.etree.parse(io.StringIO(f), parser)
+            root   = tree.getroot()
+
         # Get the text of all tags.
         text = root.xpath("//text()")
         # Join the text together.
@@ -45,8 +57,7 @@ def countWords(f, name):
         # Count the words
         word_count = len(words)
 
-
-    else:
+    elif ext == ".md" or ext == ".srt":
         for line in f:
             # Skip blank lines.
             if len(line) == 0 or line == "\n" or line == "\r":
@@ -83,33 +94,46 @@ def countWords(f, name):
     return word_count
 
 
-##############################################
-# Walk through the files.
-##############################################
 def walkFiles(file_names):
+    """
+    Walks through the directory structure
+    @param file_names: A list of files and directories to walk through.
+    @param results_flat: A string to store the results in.
+    @return: A list of dictionaries containing the filename and word count.
+    """
+
     results = []
-    # Open all the files.
+    results_flat = "Word count results:\n"
+    # Open all the files or folders.
     for name in file_names:
-        # Make sure every file exists.
+        # Check to make sure it exists
         if not os.path.exists(name):
             print("File not found: " + name)
             continue
 
-        # We don't currently handle folders.
-        if os.path.isfile(name):
-            with open(name, "r") as f:
-                results.append({"name": name, "word_count": countWords(f, name)})
-        else:
-            sys.exit("Skipping directory: " + name)
-            continue
+        for root, dirs, thing in os.walk(name):
+            for d in dirs:
+                # Add the directory name to the flat results.
+                results_flat += "\n" + d + "\n"
+                # Walk through the directory.
+                for root, dirs, files in os.walk(d):
+                    for f in files:
+                        # Only open files with specific extensions.
+                        ext = os.path.splitext(f)[1]
+                        if ext not in [".xml", ".html", ".md", ".srt"]:
+                            continue
+                        with open(f, "r") as f:
+                            name, count = countWords(f, ext)
+                            results.append({"name": f, "word_count": count})
+                            results_flat += f + ": " + str(count) + "\n"
 
-    return results
+    return results, results_flat
 
 
 ##############################################
 # Main starts here
 ##############################################
-def MakeNewRun(argv):
+def WordCount(argv):
     # Read in the filename and options
     parser = argparse.ArgumentParser(usage=instructions, add_help=False)
     parser.add_argument("source_files", default=None, nargs="*")
@@ -130,13 +154,14 @@ def MakeNewRun(argv):
     if file_names == []:
         sys.exit("No file or directory found by that name.")
 
-    results = walkFiles(file_names)
-    results_flat = ""
+    results, results_flat = walkFiles(file_names)
 
     # Print the totals to screen.
+    total_count = 0
     for r in results:
+        total_count += r["word_count"]
         print(r["name"] + ": " + str(r["word_count"]))
-        results_flat += r["name"] + "," + str(r["word_count"]) + "\n"
+        print("Total words:" + str(total_count))
 
     # Put them in a file.
     new_file = open(args.o, "w")
@@ -145,4 +170,4 @@ def MakeNewRun(argv):
 
 
 if __name__ == "__main__":
-    MakeNewRun(sys.argv)
+    WordCount(sys.argv)
