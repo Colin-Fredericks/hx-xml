@@ -514,8 +514,6 @@ def main():
 
     # "used" overrides "unused"
     report = [f for f in report if f not in course_files]
-    # TODO: I'm not catching /static/backpack.html when I should be. Why?
-    # Oh, it's because it's looking for a file named "static/backpack.html" rather than "backpack.html".
 
     # Throw out anything that doesn't end in an extension we're looking for.
     course_files = [f for f in course_files if f.split(".")[-1].lower() in extensions]
@@ -550,6 +548,13 @@ def main():
 
     for file in static_files:
         if os.path.basename(file) in course_files:
+            os.rename(
+                os.path.join(course_folder, file),
+                os.path.join(course_folder, "static", "used", os.path.basename(file)),
+            )
+            used_count += 1
+        elif os.path.basename(file).replace(" ", "_") in course_files:
+            # edX replaces spaces with underscores in filenames if you use Files & Uploads.
             os.rename(
                 os.path.join(course_folder, file),
                 os.path.join(course_folder, "static", "used", os.path.basename(file)),
