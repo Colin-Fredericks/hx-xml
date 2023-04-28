@@ -446,6 +446,12 @@ def main():
         "drafts/video",
     ]
     other_folders = ["static"]
+    always_keep = [
+        "course_image.jpeg",
+        "hx.js",
+        "hx.css",
+        "backpack.html",
+    ]
 
     # Get the course run number.
     course_root = os.path.join(course_folder, "course.xml")
@@ -513,6 +519,9 @@ def main():
 
     # Throw out anything that doesn't end in an extension we're looking for.
     course_files = [f for f in course_files if f.split(".")[-1].lower() in extensions]
+    # Always keep certain files.
+    course_files.extend(always_keep)
+    
     report = [f for f in report if f.split(".")[-1].lower() in extensions]
 
     # print("\ncourse files")
