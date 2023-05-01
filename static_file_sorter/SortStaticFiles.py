@@ -409,11 +409,13 @@ def fullCourseTextSearch(unused_files: list, course_folder: str):
 def main():
     # Get the course folder from the command line
     if len(sys.argv) != 2:
-        print("""
+        print(
+            """
         Usage: python3 SortStaticFiles.py <course_folder>
         Takes all files in the /static/ folder and moves them 
         to new folders: /static/unused/ and /static/used
-        depending on whether they're used in the course.""")
+        depending on whether they're used in the course."""
+        )
         sys.exit()
     course_folder = sys.argv[1]
 
@@ -560,7 +562,7 @@ def main():
     course_files = [f for f in course_files if f.split(".")[-1].lower() in extensions]
     # Always keep certain files.
     course_files.extend(always_keep)
-    
+
     report = [f for f in report if f.split(".")[-1].lower() in extensions]
 
     # print("\ncourse files")
