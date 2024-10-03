@@ -300,6 +300,9 @@ def SRTTimeShifter(args):
                         os.rename(name, name + ".old")
                     os.rename(newname, name)
                     fileCount += 1
+            else:
+                print("Trying to open " + name + " and it doesn't seem to be an SRT file.")
+                
 
     # Finish by saying how many files we shifted.
     if fileCount > 0:
