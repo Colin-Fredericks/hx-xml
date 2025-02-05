@@ -3,6 +3,28 @@
 
 This is a bunch of batch tools to work directly with a course export (the file structure, not the tarball) or with .srt files. You can run `python3 filename.py` for each one to have it show a set of instructions, or just open the code with a text editor - the instructions are the first thing there.
 
+## Setup
+
+I recommend using a virutal environment to install the requirements:
+
+```bash
+> python3 -m venv hxxml_venv
+> source hxxml_venv/bin/activate
+> pip3 install \(package names\)
+```
+
+If you want to install the required packages for all scripts, you will need:
+
+* `lxml`
+* `tinycss2`
+* `bs4` (which is BeautifulSoup)
+* `chardet`
+* `markdownify`
+
+The most recent versions should work. Several of them are included in this repo already, with versions that I know work. If you have difficulty some day in the future, give these a shot.
+
+## The Tools
+
 * `SortStaticFiles.py` finds any files in the /static/ folder that aren't in use and cordons them off into an "unused" folder.
 * `NameThatPage.py` adds an XML comment in every chapter, sequential, and vertical file to indicate its location in the course.
 * `md2edx.py` and `edx2md.py` are intended to help with transcription. Run one to take the files from the HTML folder and turn them into markdown files. Run the other on markdown files to make HTML.
