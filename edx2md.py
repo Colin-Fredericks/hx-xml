@@ -82,7 +82,7 @@ def Convert_To_Markdown(args=["-h"]):
             # Get its contents
             html = f.read()
             # Convert it to markdown
-            md = mdfy.markdownify(html)
+            md = mdfy(html)
             # Save the new file in the folder.
             new_file = open(
                 os.path.join(html_folder, "markdown", os.path.basename(new_name)), "w"
