@@ -113,7 +113,7 @@ def getSRTEntries(inFile):
     for index, line in enumerate(inFile):
         entryData = {}
 
-        if re.search("\d\d --> \d\d", line):
+        if re.search(r"\d\d --> \d\d", line):
             # The line before that is the index.
             try:
                 entryData["index"] = int(lastLine)
