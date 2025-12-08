@@ -5,7 +5,6 @@ Do you want a linked outline of your course that also shows student grades and c
 
 These are Python 3 scripts.
 
-* First, get the `unicodecsv` folder, which you should download and keep in the same folder with the python scripts.
 * Run `Make_Course_Outline.py` on your course export to create a TSV (tab-separated value) file with an outline of your course.
 * Open that in Google Docs and edit it to indicate which items are in which categories. Just mark the appropriate cells with an x. This is the part that takes a while. Don't use Excel because Excel sucks at Unicode.
 * Then export that as a new TSV file and run `Outline_to_HTML.py` on it to create a linked, filterable HTML outline that you can use as alternative navigation in your course.

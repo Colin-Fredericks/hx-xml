@@ -4,7 +4,6 @@ import csv
 import argparse
 from glob import glob
 import xml.etree.ElementTree as ET
-import xml.dom.minidom as minidom
 
 instructions = """
 To use:
@@ -43,8 +42,9 @@ def ConvertToHTML(filename, optionList, dirpath):
         try:
             # Read in the spreadsheet as a dictionary.
             outline_file = csv.DictReader(tsvfile, delimiter="\t")
-        except:
+        except Exception as e:
             print("Skipping " + filename + ": possible invalid file format")
+            print("Error:", e)
             return False
 
         # Set up an HTML file for output.
