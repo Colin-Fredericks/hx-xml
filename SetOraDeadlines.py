@@ -13,6 +13,8 @@ To use:
 python3 SetOraDeadlines.py (-d deadline) (-s start) path/to/course/tarball
 
 Opens an edX course export, sets ORA dates, and re-zips it for import.
+If there are no ORAs, it makes a backup and exits.
+
 By default, this sets ORA deadlines to match the start and end of the course.
 It can also be set to a specific due date and time using the -d flag,
 and a specific start date and time using the -s flag.
