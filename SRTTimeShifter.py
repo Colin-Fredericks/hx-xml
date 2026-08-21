@@ -1,7 +1,7 @@
-import sys
-import os
 import argparse
+import os
 import re
+import sys
 from glob import glob
 
 instructions = """
@@ -183,7 +183,7 @@ def shiftTimes(inFile, outFile, name, seconds, args):
             else:
                 blankEntry = {
                     "start": 0,
-                    "end": SRTEntries[i]["start"] + seconds * 1000,
+                    "end": entry["start"] + seconds * 1000,
                     "index": 0,
                     "text1": "",
                     "text2": "",
@@ -254,9 +254,13 @@ def SRTTimeShifter(args):
     # Replace arguments with wildcards with their expansion.
     # If a string does not contain a wildcard, glob will return it as is.
     # Mostly important if we run this on Windows systems.
-    file_names = list()
+    file_names = []
     for arg in args.file_names:
         file_names += glob(arg)
+
+    # Don't run on yourself.
+    if "SRTTimeShifter.py" in file_names:
+        file_names.remove("SRTTimeShifter.py")
 
     # If "seconds" is not a number, it's probably in the wrong place.
     try:
