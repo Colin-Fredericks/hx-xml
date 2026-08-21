@@ -22,6 +22,7 @@ Valid options:
 Last update: March 15th 2018
 """
 
+
 # Converts from miliseconds to hh:mm:ss,msec format
 def msecToHMS(time):
     # Make sure it's an integer.
@@ -171,10 +172,8 @@ def shiftTimes(inFile, outFile, name, seconds, args):
 
     # Go through the list and adjust times.
     for i, entry in enumerate(SRTEntries):
-
         # If we're going positive:
         if seconds > 0 and i == 0:
-
             # If there's already a blank 'padding' entry, extend it.
             if entry["text1"].strip() == "":
                 entry["start"] = 0
@@ -305,8 +304,9 @@ def SRTTimeShifter(args):
                     os.rename(newname, name)
                     fileCount += 1
             else:
-                print("Trying to open " + name + " and it doesn't seem to be an SRT file.")
-                
+                print(
+                    "Trying to open " + name + " and it doesn't seem to be an SRT file."
+                )
 
     # Finish by saying how many files we shifted.
     if fileCount > 0:
