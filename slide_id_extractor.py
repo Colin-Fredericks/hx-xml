@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-# ED_TOKEN=<token> ED_HOST='https://us.edstem.org/api' ./script.py [course_id]
 
 import os
 import sys
-import time
+
 import requests
 
 
@@ -32,8 +31,33 @@ def request(method, url, **kwargs):
 
 
 def main():
+
+    if len(sys.argv) < 2:
+        print(
+            """
+USAGE
+uv run slide_id_extractor.py [course_id]
+
+Requires your access token obtained from Ed, 
+and the numerical ID of the course in question.
+You can set environment variables ED_TOKEN=<token> 
+and ED_HOST=<url> if you don't want to be prompted for them.
+
+Sends a list of lessons and slides in the course, with their IDs, to stdout.
+"""
+        )
+        sys.exit(1)
+
     token = os.getenv("ED_TOKEN")
     host = os.getenv("ED_HOST")
+    if not token:
+        prompt = "Enter your Ed access token: "
+        token = input(prompt)
+    if not host:
+        prompt = "Enter your Ed host (default: https://us.edstem.org/api): "
+        host = input(prompt)
+        if not host:
+            host = "https://us.edstem.org/api"
     course_id = sys.argv[1]
 
     r = request(
